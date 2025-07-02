@@ -25,7 +25,7 @@ compiler_args = [
     "-fPIC",
     "-fwrapv",
     "-fvisibility=hidden",
-    "-std=c++20",
+    "-std=c++14",
 ]
 
 # These options are common with `compiler_so_args`. And since I am supplying
