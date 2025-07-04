@@ -20,6 +20,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
         threshold: float = 1.0e-5,
         dtype_float=np.float64,
+    	inpainting: bool = False,
     ):
         self.__nside = nside
         self.__coordinate_system = output_coordinate_system
@@ -35,12 +36,16 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         num_total_samples = 0
         for obs in self.obs_list:
             num_total_samples += obs.n_detectors * obs.n_samples
+            
+        if inpainting:
+            num_total_samples *= 2
 
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
 
         start_idx = 0
         end_idx = 0
+        
         for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
             if hwp is None:
                 hwp_angle = None
@@ -73,6 +78,25 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                     nside, curr_pointings_det[:, 0], curr_pointings_det[:, 1]
                 )
 
+                if inpainting:                                        
+                    #first "half" of the inpainted samples in a trash pixel
+                    start_idx = end_idx
+                    end_idx += int(obs.n_samples/2)
+                    
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pix_indices[start_idx:end_idx] = npix
+                                   
+                    npix += 1                    
+
+                    #second "half" of the inpainted samples in *another* trash pixel
+                    start_idx = end_idx
+                    end_idx += obs.n_samples - int(obs.n_samples/2)
+                    
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pix_indices[start_idx:end_idx] = npix
+                                   
+                    npix += 1
+                    
                 start_idx = end_idx
 
             del hwp_angle, curr_pointings_det
