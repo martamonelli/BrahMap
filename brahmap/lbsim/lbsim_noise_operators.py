@@ -63,8 +63,8 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         self,
         obs: Union[lbs.Observation, List[lbs.Observation]],
         input: Union[dict, Union[np.ndarray, List]],
-        input_type: str = "power_spectrum",
-        dtype=np.float64,
+        input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
+        dtype: DTypeFloat = np.float64,
     	inpainting: bool = False,
     ):
         if isinstance(obs, lbs.Observation):

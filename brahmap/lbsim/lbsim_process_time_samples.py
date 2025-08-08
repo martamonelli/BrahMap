@@ -19,7 +19,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         noise_weights: Union[np.ndarray, None] = None,
         output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
         threshold: float = 1.0e-5,
-        dtype_float=np.float64,
+        dtype_float: DTypeFloat = np.float64,
     	inpainting: bool = False,
     ):
         self.__nside = nside
