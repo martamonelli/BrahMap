@@ -39,6 +39,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
             
         if inpainting:
             num_total_samples *= 2
+            #pointings_flag = np.ones(num_total_samples, dtype=np.bool_) #FIXME: test
 
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
@@ -79,16 +80,17 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                 )
 
                 if inpainting:                                        
-                    #first "half" of the inpainted samples in a trash pixel
+                    # #first "half" of the inpainted samples in a trash pixel
                     start_idx = end_idx
                     end_idx += int(obs.n_samples/2)
                     
+                    # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
                     pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
                     pix_indices[start_idx:end_idx] = npix
                                    
                     npix += 1                    
 
-                    #second "half" of the inpainted samples in *another* trash pixel
+                    # #second "half" of the inpainted samples in *another* trash pixel
                     start_idx = end_idx
                     end_idx += obs.n_samples - int(obs.n_samples/2)
                     
@@ -97,6 +99,18 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                                    
                     npix += 1
                     
+                    '''
+                    pix_temp = pix_indices[start_idx:end_idx]
+
+                    start_idx = end_idx
+                    end_idx = start_idx + obs.n_samples
+
+                    pix_indices[start_idx:end_idx] = np.flip(pix_temp)
+                    pol_angles[start_idx:end_idx] = 10000*np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+
+                    #pointings_flag[start_idx:end_idx] = False
+                    '''
+
                 start_idx = end_idx
 
             del hwp_angle, curr_pointings_det
@@ -106,7 +120,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         super().__init__(
             npix=npix,
             pointings=pix_indices,
-            pointings_flag=pointings_flag,
+            #pointings_flag=pointings_flag,
             solver_type=solver_type,
             pol_angles=pol_angles,
             noise_weights=noise_weights,

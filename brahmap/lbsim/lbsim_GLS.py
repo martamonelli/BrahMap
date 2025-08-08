@@ -11,7 +11,11 @@ from ..lbsim import LBSimProcessTimeSamples, DTypeLBSNoiseCov
 
 from ..math import DTypeFloat
 
+import scipy as sp
 from scipy.sparse.linalg import cg, LinearOperator ### MM: added
+from scipy.interpolate import CubicSpline          ### MM: added
+from scipy.linalg import lstsq
+
 from time import time
 
 @dataclass
@@ -26,57 +30,37 @@ class LBSimGLSResult(GLSResult):
     coordinate_system: lbs.CoordinateSystem
     
     
-def check_lr(left,right):
-    '''
-    Checks if the arguments left and right are well defined (they must be different)
-    '''
-    if left == right:
-        print('one (and only one) argument between left and right must be True!')
-        quit()
+####################################################
+# DEFINE FUCTIONS FOR INPAINTING
+####################################################
 
-
-def check_Pv(P,v):
+def P_oof_inv_func(N, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz):
     '''
-    Checks if the arguments P and v are well defined (len(v) must be len(P)-1)
+    Given N, the sampling rate and all 1/f noise parameters, returns P^-1
     '''
-    if len(v) != len(P)-1:
-        print('len(v) must be len(P)-1!')
-        quit()
+    sigma = net_ukrts * np.sqrt(sampling_rate_hz) / 1e6     # as in LBS rescale_noise
+    freqs = sp.fft.rfftfreq(N, d=1/sampling_rate_hz)
+    P_oof_inv = 1/(sigma**2*(freqs**alpha + (fknee_mhz*1e-3)**alpha)/(freqs**alpha + fmin_hz**alpha)*len(freqs))
+    return P_oof_inv
 
-
-def padding(v,N,left=False,right=False):
+def A_func_left(Pinv, y, N):   
     '''
-    Given v, returns a padded vector, (0,v) or (v,0) depending on whether left or right are True.
+    Given y, pads it to the left and returns the first len(y) elements of IDFT(1/P * DFT[0,y]))
     
     ARGUMENTS____________________________________________ 
-    v:     vector to be padded
-    N:     final length of the padded vector
-    left:  if true, returns (0,v) 
-    right: if true, returns (v,0) 
-    '''
-    check_lr(left,right)
-    n = len(v)
-    z = np.zeros(N)
-    if right == True:
-        z[:n] = v
-    elif left == True:
-        z[-n:] = v    
-    return z
+    Pinv:  inverse of the power spectrum
+    y:     vector to be padded
+    ''' 
+    n = len(y)
+    z = np.concatenate((np.zeros(N-n), y))
+    z_fft = sp.fft.rfft(z)
+    product = Pinv * z_fft
+    result = sp.fft.irfft(product)
+    return result[:N-n]
 
-
-def A_func(P,v,left=False,right=False):    
-    # z = padded v
-    # A(z) = IDFT(1/P * DFT(z))
-    check_lr(left,right)
-    check_Pv(P,v)
-    n = len(v)
-    N = 2*n
-    z = padding(v,N,left,right)
-    z_fft = np.fft.rfft(z)
-    product = 1/P * z_fft
-    result = np.fft.irfft(product).real
-    return result[:n]
-
+####################################################
+# BACK TO BRAHMAP
+####################################################
 
 def LBSim_compute_GLS_maps(
     nside: int,
@@ -133,13 +117,8 @@ def LBSim_compute_GLS_maps(
             alphas = obs.alpha
             nets_ukrts = obs.net_ukrts
             sampling_rate_hz = obs.sampling_rate_hz
-            
-            sigmas = nets_ukrts * np.sqrt(sampling_rate_hz) / 1e6 #as in rescale_noise
-            
-            start = time()
 
-            for det_idx in range(obs.n_detectors):
-                
+            for det_idx in range(obs.n_detectors):   
                 tod_temp = getattr(obs, components[0])[det_idx]
                 nsamp_temp = len(tod_temp)
                 
@@ -147,7 +126,6 @@ def LBSim_compute_GLS_maps(
                 fmin_hz = fmins_hz[det_idx]
                 alpha = alphas[det_idx]
                 net_ukrts = nets_ukrts[det_idx]
-                sigma = sigmas[det_idx]
                 
                 end_idx += obs.n_samples
                 time_ordered_data[start_idx:end_idx] = tod_temp
@@ -155,29 +133,60 @@ def LBSim_compute_GLS_maps(
                 start_idx = end_idx
                 end_idx += obs.n_samples
 
-                freqs = np.fft.rfftfreq(2*nsamp_temp, d=1/sampling_rate_hz) #2*nsamp_temp!
-                P_oof = sigma**2*(freqs**alpha + (fknee_mhz*1e-3)**alpha)/(freqs**alpha + fmin_hz**alpha)*len(freqs)
+                # total length of the inpainted TOD
+                nsamp_inpainted = 2*nsamp_temp
+
+                # inverse of the 1/f power spectra
+                P_oof_inv = P_oof_inv_func(nsamp_inpainted, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz)
                 
-                b = -A_func(P_oof, tod_temp, left=True)	#A_func applied to a vector [0,y]
-                
-                def A_func_x_only(x):
-                    return A_func(P_oof, x, right=True)	#A_func applied to a vector [x,0]
-               
+                nn = 100
+
+                tod_temp_binned = np.empty(int(nsamp_temp/nn))
+
+                for i in range(len(tod_temp_binned)):
+                    tod_temp_binned[i] = np.mean(tod_temp[i*nn:(i+1)*nn])
+
+                nsamp_binned = len(tod_temp_binned)
+                nsamp_inpainted_binned = 2*nsamp_binned
+
+                nyquist_binned = sampling_rate_hz/2/nn
+
+                freqs = sp.fft.rfftfreq(nsamp_inpainted, d=1/sampling_rate_hz)
+                mask_freqs = np.where(freqs<=nyquist_binned)
+
+                # inverse of the 1/f power spectra
+                P_oof_inv_binned = P_oof_inv[mask_freqs]*nn
+
+                # -IDFT(1/P * DFT([0,y]))
+                b_binned = -A_func_left(P_oof_inv_binned, tod_temp_binned, nsamp_inpainted_binned)
+
+                lenx_binned = nsamp_inpainted_binned - nsamp_binned
+
+                # we need a function of x only to build the LinearOperator for CG
+                def A_func_x_only_binned(x):   
+                    '''
+                    Given x, computes A_func(P_oof_inv, x, nsamp_inpainted, right=True)
+                    ''' 
+                    z = np.concatenate((x, np.zeros(nsamp_binned)))
+                    z_fft = sp.fft.rfft(z)
+                    product = P_oof_inv_binned * z_fft
+                    result = sp.fft.irfft(product)
+                    return result[:lenx_binned]
+
                 # Define the LinearOperator for CG
-                A_op = LinearOperator((nsamp_temp,nsamp_temp), matvec=A_func_x_only)
+                A_op_binned = LinearOperator((lenx_binned,lenx_binned), matvec=A_func_x_only_binned)
 
-                # Initial guess for x
-                avg_head = np.mean(tod_temp[:10])
-                avg_tail = np.mean(tod_temp[-10:])
-                x0 = avg_tail + np.arange(nsamp_temp)/nsamp_temp*(avg_head-avg_tail)
+                x_sol_10_binned, info = cg(A_op_binned, b_binned, rtol=1e-10)
 
-                x_sol, info = cg(A_op, b, x0=x0, rtol=1e-10)
-                
-                time_ordered_data[start_idx:end_idx] = x_sol
+                x = nn*(1/2 + np.arange(nsamp_binned))
+                y = x_sol_10_binned
+                cs = CubicSpline(x, y)
+
+                x_sol_10_binned_spline = cs(np.arange(nsamp_temp))
+
+                time_ordered_data[start_idx:end_idx] = x_sol_10_binned_spline
                 
                 start_idx = end_idx
-
-            print(time()-start)
                          
     else: 
         time_ordered_data = np.concatenate(
