@@ -1,25 +1,39 @@
 import numpy as np
 import warnings
-from typing import List, Union
+from typing import List, Union, Literal, Callable
 
-from ..utilities import TypeChangeWarning
-from ..base import NoiseCovLinearOperator, InvNoiseCovLinearOperator
-from ..math import DTypeFloat
+from ..base import TypeChangeWarning
+from ..base import LinearOperator, NoiseCovLinearOperator, InvNoiseCovLinearOperator
+from ..math import DTypeFloat, cg
 from ..mpi import MPI_RAISE_EXCEPTION
-
-import scipy.sparse.linalg
+from ..core import InvNoiseCovLO_Circulant
 
 from brahmap import MPI_UTILS
 
 
 class NoiseCovLO_Toeplitz01(NoiseCovLinearOperator):
-    """The input covariance array must be at least of the size n. The input power spectrum array must be of the size 2n-2 or 2n-1."""
+    """Linear operator for Toeplitz noise covariance
+
+    The input covariance array must be at least of the size n. The input power
+    spectrum array must be of the size 2n-2 or 2n-1.
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List]
+        _description_
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "power_spectrum"
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
 
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List],
-        input_type: str = "power_spectrum",
+        input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
         dtype: DTypeFloat = np.float64,
     ):
         input = np.asarray(a=input, dtype=dtype)
@@ -102,17 +116,42 @@ class NoiseCovLO_Toeplitz01(NoiseCovLinearOperator):
 
 
 class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
-    """The input covariance array must be at least of the size n. The input power spectrum array must be of the size 2n-2 or 2n-1."""
+    """Linear operator for the inverse of Toeplitz noise covariance
+
+    The input covariance array must be at least of the size n. The input power
+    spectrum array must be of the size 2n-2 or 2n-1.
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List]
+        _description_
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "power_spectrum"
+    precond_op : Union[ LinearOperator, Literal[None, "Strang", "TChan", "RChan", "KK2"] ], optional
+        _description_, by default None
+    precond_maxiter : int, optional
+        _description_, by default 50
+    precond_atol : float, optional
+        _description_, by default 1.0e-10
+    precond_callback : Callable, optional
+        _description_, by default None
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
 
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List],
-        input_type: str = "power_spectrum",
-        precond_op=None,
-        precond_maxiter=50,
-        precond_atol=1.0e-10,
-        precond_callback=None,
+        input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
+        precond_op: Union[
+            LinearOperator, Literal[None, "Strang", "TChan", "RChan", "KK2"]
+        ] = None,
+        precond_maxiter: int = 50,
+        precond_atol: float = 1.0e-10,
+        precond_callback: Callable = None,
         dtype: DTypeFloat = np.float64,
     ):
         self.__toeplitz_op = NoiseCovLO_Toeplitz01(
@@ -124,8 +163,59 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
 
         self.__precond_atol = precond_atol
         self.__precond_maxiter = precond_maxiter
-        self.__precond_op = precond_op
         self.__precond_callback = precond_callback
+
+        self.__last_num_iterations = 0
+
+        if precond_op is None:
+            self.__precond_op = None
+        elif isinstance(precond_op, LinearOperator) or isinstance(
+            precond_op, np.ndarray
+        ):
+            self.__precond_op = precond_op
+        elif precond_op in ["Strang", "TChan", "RChan", "KK2"]:
+            if input_type == "power_spectrum":
+                cov = np.fft.ifft(input).real[:size]
+            else:
+                cov = input[:size]
+
+            if precond_op == "Strang":
+                temp_size = int(np.floor(cov.size / 2))
+                if cov.size % 2 == 0:
+                    new_cov = np.concatenate(
+                        [cov[:temp_size], cov[1 : temp_size + 1][::-1]]
+                    )
+                else:
+                    new_cov = np.concatenate(
+                        [cov[: temp_size + 1], cov[1 : temp_size + 1][::-1]]
+                    )
+            elif precond_op == "TChan":
+                new_cov = np.empty_like(cov)
+                new_cov[0] = cov[0]
+                n = cov.size
+                for idx in range(1, n):
+                    new_cov[idx] = ((n - idx) * cov[idx] + idx * cov[n - idx]) / n
+            elif precond_op == "RChan":
+                new_cov = np.roll(np.flip(cov), 1)
+                new_cov += cov
+                new_cov[0] = cov[0]
+            elif precond_op == "KK2":  # Circulant but not symmetric
+                new_cov = np.roll(np.flip(cov), 1)
+                new_cov[0] = 0
+                new_cov = cov - new_cov
+
+            self.__precond_op = InvNoiseCovLO_Circulant(
+                size=size,
+                input=new_cov,
+                input_type="covariance",
+                dtype=dtype,
+            )
+        else:
+            MPI_RAISE_EXCEPTION(
+                condition=True,
+                exception=ValueError,
+                message="Invalid preconditioner operator provided!",
+            )
 
         super(InvNoiseCovLO_Toeplitz01, self).__init__(
             nargin=size,
@@ -139,8 +229,17 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
         factor = 1.0
         return factor * np.ones(self.size, dtype=self.dtype)
 
+    @property
+    def get_last_num_iterations(self) -> int:
+        return self.__last_num_iterations
+
     def get_inverse(self):
         return self.__toeplitz_op
+
+    def __callback(self, x, r, norm_residual):
+        self.__last_num_iterations += 1
+        if self.__precond_callback is not None:
+            self.__precond_callback(x, r, norm_residual)
 
     def _mult(self, vec: np.ndarray):
         MPI_RAISE_EXCEPTION(
@@ -148,6 +247,8 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
             exception=ValueError,
             message=f"Dimensions of `vec` is not compatible with the dimensions of this `InvNoiseCovLO_Toeplitz` instance.\nShape of `InvNoiseCovLO_Toeplitz` instance: {self.shape}\nShape of `vec`: {vec.shape}",
         )
+
+        self.__last_num_iterations = 0
 
         if vec.dtype != self.dtype:
             if MPI_UTILS.rank == 0:
@@ -157,13 +258,14 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
                 )
             vec = vec.astype(dtype=self.dtype, copy=False)
 
-        prod, _ = scipy.sparse.linalg.gmres(
+        prod, _ = cg(
             A=self.__toeplitz_op,
             b=vec,
             atol=self.__precond_atol,
             maxiter=self.__precond_maxiter,
             M=self.__precond_op,
-            callback=self.__precond_callback,
+            callback=self.__callback,
+            parallel=False,
         )
 
         return prod

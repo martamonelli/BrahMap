@@ -1,10 +1,10 @@
 import numpy as np
 import warnings
 from numbers import Number
-from typing import List, Union
+from typing import List, Union, Literal
 
 
-from ..utilities import TypeChangeWarning
+from ..base import TypeChangeWarning
 
 from ..math import DTypeFloat, linalg_tools
 
@@ -16,11 +16,25 @@ from brahmap import MPI_UTILS
 
 
 class NoiseCovLO_Diagonal(NoiseCovLinearOperator):
+    """Linear operator for diagonal noise covariance
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List, DTypeFloat], optional
+        _description_, by default 1.0
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "covariance"
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
+
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List, DTypeFloat] = 1.0,
-        input_type="covariance",
+        input_type: Literal["covariance", "power_spectrum"] = "covariance",
         dtype: DTypeFloat = np.float64,
     ):
         if isinstance(input, Number) and input_type == "covariance":
@@ -91,11 +105,25 @@ class NoiseCovLO_Diagonal(NoiseCovLinearOperator):
 
 
 class InvNoiseCovLO_Diagonal(InvNoiseCovLinearOperator):
+    """Linear operator for the inverse of diagonal noise covariance
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List, DTypeFloat], optional
+        _description_, by default 1.0
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "covariance"
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
+
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List, DTypeFloat] = 1.0,
-        input_type="covariance",
+        input_type: Literal["covariance", "power_spectrum"] = "covariance",
         dtype: DTypeFloat = np.float64,
     ):
         if isinstance(input, Number) and input_type == "covariance":

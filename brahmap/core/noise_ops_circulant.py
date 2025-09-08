@@ -1,8 +1,8 @@
 import numpy as np
 import warnings
-from typing import List, Union
+from typing import List, Union, Literal
 
-from ..utilities import TypeChangeWarning
+from ..base import TypeChangeWarning
 from ..base import NoiseCovLinearOperator, InvNoiseCovLinearOperator
 from ..math import DTypeFloat
 from ..mpi import MPI_RAISE_EXCEPTION
@@ -11,11 +11,25 @@ from brahmap import MPI_UTILS
 
 
 class NoiseCovLO_Circulant(NoiseCovLinearOperator):
+    """Linear operator for Circulant noise covariance
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List]
+        _description_
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "power_spectrum"
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
+
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List],
-        input_type: str = "power_spectrum",
+        input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
         dtype: DTypeFloat = np.float64,
     ):
         input = np.asarray(a=input, dtype=dtype)
@@ -80,11 +94,25 @@ class NoiseCovLO_Circulant(NoiseCovLinearOperator):
 
 
 class InvNoiseCovLO_Circulant(InvNoiseCovLinearOperator):
+    """Linear operator for the inverse of Circulant noise covariance
+
+    Parameters
+    ----------
+    size : int
+        _description_
+    input : Union[np.ndarray, List]
+        _description_
+    input_type : Literal["covariance", "power_spectrum"], optional
+        _description_, by default "power_spectrum"
+    dtype : DTypeFloat, optional
+        _description_, by default np.float64
+    """
+
     def __init__(
         self,
         size: int,
         input: Union[np.ndarray, List],
-        input_type: str = "power_spectrum",
+        input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
         dtype: DTypeFloat = np.float64,
     ):
         input = np.asarray(a=input, dtype=dtype)
