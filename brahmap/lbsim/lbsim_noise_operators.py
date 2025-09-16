@@ -145,12 +145,13 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
             block_input = {}
 
             for obs in obs_list:
+                n_samples_new = 2*obs.n_samples if inpainting else obs.n_samples
                 for det_idx in range(obs.n_detectors):
                     # if input is an array or a list, it will be taken as same for all the detectors available in the observation
                     block_size.append(n_samples_new)
                     
                     if n_samples_new not in block_input.keys():
-                        resized_input = self._resize_input(
+                        resized_input = self.__resize_input(
                             new_size=n_samples_new,
                             input=input,
                             input_type=input_type,
