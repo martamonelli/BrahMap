@@ -71,8 +71,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
 
         start_idx = 0
-        end_idx = 0
-        
+        end_idx = 0        
         for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
             if hwp is None:
                 hwp_angle = None
@@ -146,7 +145,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         super().__init__(
             npix=npix,
             pointings=pix_indices,
-            #pointings_flag=pointings_flag,
+            pointings_flag=pointings_flag,
             solver_type=solver_type,
             pol_angles=pol_angles,
             noise_weights=noise_weights,

@@ -12,11 +12,8 @@ from ..lbsim import LBSimProcessTimeSamples, DTypeLBSNoiseCov
 from ..math import DTypeFloat
 
 import scipy as sp
-from scipy.sparse.linalg import cg, LinearOperator ### MM: added
-from scipy.interpolate import CubicSpline          ### MM: added
-from scipy.linalg import lstsq
-
-from time import time
+from scipy.sparse.linalg import cg, LinearOperator
+from scipy.interpolate import CubicSpline
 
 @dataclass
 class LBSimGLSParameters(GLSParameters):
@@ -83,7 +80,6 @@ class LBSimGLSResult(GLSResult):
     
 ####################################################
 # DEFINE FUCTIONS FOR INPAINTING
-####################################################
 
 def P_oof_inv_func(N, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz):
     '''
@@ -109,8 +105,6 @@ def A_func_left(Pinv, y, N):
     result = sp.fft.irfft(product)
     return result[:N-n]
 
-####################################################
-# BACK TO BRAHMAP
 ####################################################
 
 def LBSim_compute_GLS_maps(
