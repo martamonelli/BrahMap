@@ -193,6 +193,7 @@ def compute_GLS_maps_from_PTS(
     )
 
     b = pointing_operator.T * inv_noise_cov_operator * time_ordered_data
+    #time_ordered_data = pointing_operator.T * inv_noise_cov_operator * time_ordered_data
 
     num_iterations = 0
     if gls_parameters.use_iterative_solver:
@@ -208,6 +209,7 @@ def compute_GLS_maps_from_PTS(
         map_vector, pcg_status = cg(
             A=A,
             b=b,
+            #b=time_ordered_data,
             atol=gls_parameters.isolver_threshold,
             maxiter=gls_parameters.isolver_max_iterations,
             M=blockdiagprecond_operator,
