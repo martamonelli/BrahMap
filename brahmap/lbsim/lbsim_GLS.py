@@ -214,7 +214,7 @@ def LBSim_compute_GLS_maps(
                 # inverse of the 1/f power spectra
                 P_oof_inv = P_oof_inv_func(nsamp_inpainted, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz)
                 
-                nn = 100
+                nn = 32 #FIXME: how should we pick this?
 
                 tod_temp_binned = np.empty(int(nsamp_temp/nn))
 
