@@ -86,8 +86,8 @@ def P_oof_inv_func(N, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz):
     Given N, the sampling rate and all 1/f noise parameters, returns P^-1
     '''
     sigma = net_ukrts * np.sqrt(sampling_rate_hz) / 1e6     # as in LBS rescale_noise
-    freqs = sp.fft.rfftfreq(N, d=1/sampling_rate_hz)
-    P_oof_inv = 1/(sigma**2*(freqs**alpha + (fknee_mhz*1e-3)**alpha)/(freqs**alpha + fmin_hz**alpha)*len(freqs))
+    abs_freqs = np.abs(np.fft.fftfreq(N, d=1/sampling_rate_hz))
+    P_oof_inv = 1/(sigma**2*(abs_freqs**alpha + (fknee_mhz*1e-3)**alpha)/(abs_freqs**alpha + fmin_hz**alpha)*len(abs_freqs))
     return P_oof_inv
 
 def A_func_left(Pinv, y, N):   
@@ -100,9 +100,9 @@ def A_func_left(Pinv, y, N):
     ''' 
     n = len(y)
     z = np.concatenate((np.zeros(N-n), y))
-    z_fft = sp.fft.rfft(z)
+    z_fft = np.fft.fft(z)
     product = Pinv * z_fft
-    result = sp.fft.irfft(product)
+    result = np.fft.ifft(product)
     return result[:N-n]
 
 ####################################################
@@ -226,8 +226,8 @@ def LBSim_compute_GLS_maps(
 
                 nyquist_binned = sampling_rate_hz/2/nn
 
-                freqs = sp.fft.rfftfreq(nsamp_inpainted, d=1/sampling_rate_hz)
-                mask_freqs = np.where(freqs<=nyquist_binned)
+                freqs = np.fft.fftfreq(nsamp_inpainted, d=1/sampling_rate_hz)
+                mask_freqs = np.where((freqs<nyquist_binned) & (freqs>=-nyquist_binned))
 
                 # inverse of the 1/f power spectra
                 P_oof_inv_binned = P_oof_inv[mask_freqs]*nn
@@ -243,9 +243,9 @@ def LBSim_compute_GLS_maps(
                     Given x, computes A_func(P_oof_inv, x, nsamp_inpainted, right=True)
                     ''' 
                     z = np.concatenate((x, np.zeros(nsamp_binned)))
-                    z_fft = sp.fft.rfft(z)
-                    product = P_oof_inv_binned * z_fft
-                    result = sp.fft.irfft(product)
+                    z_fft = np.fft.fft(z)
+                    product = P_oof_inv_binned * z_fft #operands could not be broadcast together with shapes (65537,) (65536,) 
+                    result = np.fft.ifft(product)
                     return result[:lenx_binned]
 
                 # Define the LinearOperator for CG

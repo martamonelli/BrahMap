@@ -106,6 +106,9 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         _description_, by default "power_spectrum"
     dtype : DTypeFloat, optional
         _description_, by default np.float64
+    inpainting : bool, optional
+        If True, the input covariance/power spectrum will be resized to double
+        the observation length, by default False
     """
 
     def __init__(
@@ -189,8 +192,8 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         elif input_type == "power_spectrum":
             input_size = len(input)
             if input_size > new_size:
-                new_input = np.fft.irfft(input)[:new_size]  # new covariance
-                new_input = np.fft.rfft(new_input).real.astype(
+                new_input = np.fft.ifft(input)[:new_size]  # new covariance
+                new_input = np.fft.fft(new_input).real.astype(
                     dtype=dtype,
                     copy=False,
                 )  # new ps
@@ -300,13 +303,13 @@ class LBSim_InvNoiseCovLO_Toeplitz(BlockDiagInvNoiseCovLO):
             ex_size1 = 2 * new_size - 1  # expected size of ps array (2n-1)
             ex_size2 = 2 * new_size - 2  # expected size of ps array (2n-2)
             if input_size > ex_size2 and input_size > ex_size1:
-                new_input = np.fft.irfft(input)[
+                new_input = np.fft.ifft(input)[
                     :new_size
                 ]  # covariance of size `new_size`
                 new_input = np.concatenate(
                     [new_input, new_input[1:-1][::-1]]
                 )  # full covariance of size `2*new_size - 2`
-                new_input = np.fft.rfft(new_input).real.astype(
+                new_input = np.fft.fft(new_input).real.astype(
                     dtype=dtype, copy=False
                 )  # full ps of size `2*new_size - 2`
                 return new_input

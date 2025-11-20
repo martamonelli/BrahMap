@@ -33,6 +33,9 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         _description_, by default 1.0e-5
     dtype_float : DTypeFloat, optional
         _description_, by default np.float64
+    inpainting : bool, optional
+        If True, pol_angles and pix_indices will be resized to double
+        the observation length, by default False
     """
     def __init__(
         self,
