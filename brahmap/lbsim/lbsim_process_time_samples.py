@@ -50,6 +50,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         threshold: float = 1.0e-5,
         dtype_float: DTypeFloat = np.float64,
     	inpainting: bool = False,
+        zeros: bool = False,
     ):
         self.__nside = nside
         self.__coordinate_system = output_coordinate_system
@@ -138,6 +139,9 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                     #pointings_flag[start_idx:end_idx] = False
                     '''
+
+                    if zeros:
+                        pointings_flag[start_idx:end_idx] = False
 
                 start_idx = end_idx
 

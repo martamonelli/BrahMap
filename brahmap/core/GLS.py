@@ -43,7 +43,7 @@ class GLSParameters:
 
     solver_type: SolverType = SolverType.IQU
     use_iterative_solver: bool = True
-    isolver_threshold: float = 1.0e-12
+    isolver_threshold: float = 1e-15
     isolver_max_iterations: int = 100
     callback_function: Callable = None
     return_processed_samples: bool = False

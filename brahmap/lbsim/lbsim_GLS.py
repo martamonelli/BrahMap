@@ -119,6 +119,7 @@ def LBSim_compute_GLS_maps(
     dtype_float: Optional[DTypeFloat] = None,
     LBSim_gls_parameters: LBSimGLSParameters = LBSimGLSParameters(),
     inpainting: bool = False,
+    zeros: bool = False,
 ) -> Union[LBSimGLSResult, tuple[LBSimProcessTimeSamples, LBSimGLSResult]]:
     """_summary_
 
@@ -167,6 +168,7 @@ def LBSim_compute_GLS_maps(
         threshold=threshold,
         dtype_float=dtype_float,
         inpainting=inpainting,
+        zeros=zeros,
     )
 
     if isinstance(components, str):
@@ -208,59 +210,62 @@ def LBSim_compute_GLS_maps(
                 start_idx = end_idx
                 end_idx += obs.n_samples
 
-                # total length of the inpainted TOD
-                nsamp_inpainted = 2*nsamp_temp
+                if zeros:
+                    time_ordered_data[start_idx:end_idx] = np.zeros(end_idx-start_idx)
+                else:
+                    # total length of the inpainted TOD
+                    nsamp_inpainted = 2*nsamp_temp
 
-                # inverse of the 1/f power spectra
-                P_oof_inv = P_oof_inv_func(nsamp_inpainted, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz)
-                
-                nn = 32 #FIXME: how should we pick this?
+                    # inverse of the 1/f power spectra
+                    P_oof_inv = P_oof_inv_func(nsamp_inpainted, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz)
+                    
+                    nn = 32 #FIXME: how should we pick this?
 
-                tod_temp_binned = np.empty(int(nsamp_temp/nn))
+                    tod_temp_binned = np.empty(int(nsamp_temp/nn))
 
-                for i in range(len(tod_temp_binned)):
-                    tod_temp_binned[i] = np.mean(tod_temp[i*nn:(i+1)*nn])
+                    for i in range(len(tod_temp_binned)):
+                        tod_temp_binned[i] = np.mean(tod_temp[i*nn:(i+1)*nn])
 
-                nsamp_binned = len(tod_temp_binned)
-                nsamp_inpainted_binned = 2*nsamp_binned
+                    nsamp_binned = len(tod_temp_binned)
+                    nsamp_inpainted_binned = 2*nsamp_binned
 
-                nyquist_binned = sampling_rate_hz/2/nn
+                    nyquist_binned = sampling_rate_hz/2/nn
 
-                freqs = np.fft.fftfreq(nsamp_inpainted, d=1/sampling_rate_hz)
-                mask_freqs = np.where((freqs<nyquist_binned) & (freqs>=-nyquist_binned))
+                    freqs = np.fft.fftfreq(nsamp_inpainted, d=1/sampling_rate_hz)
+                    mask_freqs = np.where((freqs<nyquist_binned) & (freqs>=-nyquist_binned))
 
-                # inverse of the 1/f power spectra
-                P_oof_inv_binned = P_oof_inv[mask_freqs]*nn
+                    # inverse of the 1/f power spectra
+                    P_oof_inv_binned = P_oof_inv[mask_freqs]*nn
 
-                # -IDFT(1/P * DFT([0,y]))
-                b_binned = -A_func_left(P_oof_inv_binned, tod_temp_binned, nsamp_inpainted_binned)
+                    # -IDFT(1/P * DFT([0,y]))
+                    b_binned = -A_func_left(P_oof_inv_binned, tod_temp_binned, nsamp_inpainted_binned)
 
-                lenx_binned = nsamp_inpainted_binned - nsamp_binned
+                    lenx_binned = nsamp_inpainted_binned - nsamp_binned
 
-                # we need a function of x only to build the LinearOperator for CG
-                def A_func_x_only_binned(x):   
-                    '''
-                    Given x, computes A_func(P_oof_inv, x, nsamp_inpainted, right=True)
-                    ''' 
-                    z = np.concatenate((x, np.zeros(nsamp_binned)))
-                    z_fft = np.fft.fft(z)
-                    product = P_oof_inv_binned * z_fft #operands could not be broadcast together with shapes (65537,) (65536,) 
-                    result = np.fft.ifft(product)
-                    return result[:lenx_binned]
+                    # we need a function of x only to build the LinearOperator for CG
+                    def A_func_x_only_binned(x):   
+                        '''
+                        Given x, computes A_func(P_oof_inv, x, nsamp_inpainted, right=True)
+                        ''' 
+                        z = np.concatenate((x, np.zeros(nsamp_binned)))
+                        z_fft = np.fft.fft(z)
+                        product = P_oof_inv_binned * z_fft
+                        result = np.fft.ifft(product)
+                        return result[:lenx_binned]
 
-                # Define the LinearOperator for CG
-                A_op_binned = LinearOperator((lenx_binned,lenx_binned), matvec=A_func_x_only_binned)
+                    # Define the LinearOperator for CG
+                    A_op_binned = LinearOperator((lenx_binned,lenx_binned), matvec=A_func_x_only_binned)
 
-                x_sol_10_binned, info = cg(A_op_binned, b_binned, rtol=1e-10)
+                    x_sol_10_binned, info = cg(A_op_binned, b_binned, rtol=1e-15)
 
-                x = nn*(1/2 + np.arange(nsamp_binned))
-                y = x_sol_10_binned
-                cs = CubicSpline(x, y)
+                    x = nn*(1/2 + np.arange(nsamp_binned))
+                    y = x_sol_10_binned
+                    cs = CubicSpline(x, y)
 
-                x_sol_10_binned_spline = cs(np.arange(nsamp_temp))
+                    x_sol_10_binned_spline = cs(np.arange(nsamp_temp))
 
-                time_ordered_data[start_idx:end_idx] = x_sol_10_binned_spline
-                
+                    time_ordered_data[start_idx:end_idx] = x_sol_10_binned_spline
+
                 start_idx = end_idx
                          
     else: 
