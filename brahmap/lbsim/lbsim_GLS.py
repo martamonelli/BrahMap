@@ -182,9 +182,14 @@ def LBSim_compute_GLS_maps(
             factor=1.0,
         )
 
+    if zeros:
+        where_zeros = np.ones(processed_samples.nsamples)
+    else:
+        where_zeros = None
+
     if inpainting:
         time_ordered_data = np.empty(processed_samples.nsamples)
-        
+
         start_idx = 0
         end_idx = 0
         
@@ -212,6 +217,7 @@ def LBSim_compute_GLS_maps(
 
                 if zeros:
                     time_ordered_data[start_idx:end_idx] = np.zeros(end_idx-start_idx)
+                    where_zeros[start_idx:end_idx] = np.zeros(end_idx-start_idx)
                 else:
                     # total length of the inpainted TOD
                     nsamp_inpainted = 2*nsamp_temp
@@ -278,6 +284,7 @@ def LBSim_compute_GLS_maps(
         time_ordered_data=time_ordered_data,
         inv_noise_cov_operator=inv_noise_cov_operator,
         gls_parameters=LBSim_gls_parameters,
+        where_zeros=where_zeros,
     )
     
     if inpainting:

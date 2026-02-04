@@ -138,6 +138,7 @@ def compute_GLS_maps_from_PTS(
     time_ordered_data: np.ndarray,
     inv_noise_cov_operator: Union[DTypeNoiseCov, None] = None,
     gls_parameters: GLSParameters = GLSParameters(),
+    where_zeros: np.ndarray = None,
 ) -> GLSResult:
     """This function computes the GLS maps given an instance of
     `ProcessTimeSamples`, TOD, and inverse noise covariance operator
@@ -152,6 +153,8 @@ def compute_GLS_maps_from_PTS(
         _description_, by default None
     gls_parameters : GLSParameters, optional
         _description_, by default GLSParameters()
+    where_zeros : np.ndarray, optional
+        _description_, by default None
 
     Returns
     -------
@@ -193,6 +196,10 @@ def compute_GLS_maps_from_PTS(
     )
 
     b = pointing_operator.T * inv_noise_cov_operator * time_ordered_data
+
+    if where_zeros != None:
+        b *= where_zeros
+
     #time_ordered_data = pointing_operator.T * inv_noise_cov_operator * time_ordered_data
 
     num_iterations = 0
@@ -205,6 +212,9 @@ def compute_GLS_maps_from_PTS(
                 gls_parameters.callback_function(x, r, norm_residual)
 
         A = pointing_operator.T * inv_noise_cov_operator * pointing_operator
+
+        if where_zeros != None:
+            A *= where_zeros
 
         map_vector, pcg_status = cg(
             A=A,
