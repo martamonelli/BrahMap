@@ -86,6 +86,7 @@ def LBSim_compute_GLS_maps(
     threshold: float = 1.0e-5,
     dtype_float: Optional[DTypeFloat] = None,
     LBSim_gls_parameters: LBSimGLSParameters = LBSimGLSParameters(),
+    x0: Union[np.ndarray, None] = None,
 ) -> Union[LBSimGLSResult, tuple[LBSimProcessTimeSamples, LBSimGLSResult]]:
     """_summary_
 
@@ -111,6 +112,9 @@ def LBSim_compute_GLS_maps(
         _description_, by default None
     LBSim_gls_parameters : LBSimGLSParameters, optional
         _description_, by default LBSimGLSParameters()
+    x0 : np.ndarray, optional
+        Initial guess for the GLS solution in the form 
+        [I_1, Q_1, U_1, I_2, Q_2, U_2, ...], by default None
 
     Returns
     -------
@@ -140,14 +144,14 @@ def LBSim_compute_GLS_maps(
 
     if len(components) > 1:
         lbs.mapmaking.destriper._sum_components_into_obs(
-            obs_list=observations,
+            obs_list=processed_samples.obs_list,
             target=components[0],
             other_components=components[1:],
             factor=1.0,
         )
 
     time_ordered_data = np.concatenate(
-        [getattr(obs, components[0]) for obs in observations], axis=None
+        [getattr(obs, components[0]) for obs in processed_samples.obs_list], axis=None
     )
 
     gls_result = compute_GLS_maps_from_PTS(
@@ -155,6 +159,7 @@ def LBSim_compute_GLS_maps(
         time_ordered_data=time_ordered_data,
         inv_noise_cov_operator=inv_noise_cov_operator,
         gls_parameters=LBSim_gls_parameters,
+        x0=x0,
     )
 
     gls_result = LBSimGLSResult(

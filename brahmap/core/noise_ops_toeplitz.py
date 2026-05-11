@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.fft
 import warnings
 from typing import List, Union, Literal, Callable
 
@@ -60,12 +61,18 @@ class NoiseCovLO_Toeplitz01(NoiseCovLinearOperator):
                 exception=ValueError,
                 message="The input power spectrum array must be of the size 2n-2 or 2n-1, where n is the size of the linear operator",
             )
-            covariance = np.fft.ifft(input)[:size]
-            covariance = covariance.real.astype(dtype=dtype)
+            covariance = scipy.fft.ifft(
+                input,
+                workers=MPI_UTILS.nthreads_per_process,
+            )[:size]
+            covariance = covariance.real.astype(dtype=dtype, copy=False)
 
         self.__diag_factor = covariance[0]
         self.__input = np.concatenate([covariance, np.roll(covariance[::-1], 1)])
-        self.__input = np.fft.fft(self.__input)
+        self.__input = scipy.fft.rfft(
+            self.__input,
+            workers=MPI_UTILS.nthreads_per_process,
+        )
 
         del covariance
 
@@ -81,8 +88,12 @@ class NoiseCovLO_Toeplitz01(NoiseCovLinearOperator):
         return self.__diag_factor * np.ones(self.size, dtype=self.dtype)
 
     def get_inverse(self):
-        covariance = np.fft.ifft(self.__input)[: self.size]
-        covariance = covariance.real.astype(dtype=self.dtype)
+        covariance = scipy.fft.irfft(
+            self.__input,
+            n=2 * self.size,
+            workers=MPI_UTILS.nthreads_per_process,
+        )[: self.size]
+        covariance = covariance.astype(dtype=self.dtype)
         inv_noise_cov = InvNoiseCovLO_Toeplitz01(
             size=self.size,
             input=covariance,
@@ -108,11 +119,18 @@ class NoiseCovLO_Toeplitz01(NoiseCovLinearOperator):
 
         prod = np.pad(vec, pad_width=((0, self.size)), mode="constant")
 
-        prod = np.fft.ifft(prod)
+        prod = scipy.fft.rfft(
+            prod,
+            workers=MPI_UTILS.nthreads_per_process,
+        )
         prod = prod * self.__input
-        prod = np.fft.fft(prod)[: self.size]
+        prod = scipy.fft.irfft(
+            prod,
+            n=2 * self.size,
+            workers=MPI_UTILS.nthreads_per_process,
+        )[: self.size]
 
-        return prod.real.astype(dtype=self.dtype, copy=False)
+        return prod.astype(dtype=self.dtype, copy=False)
 
 
 class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
@@ -161,21 +179,32 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
             dtype=dtype,
         )
 
-        self.__precond_atol = precond_atol
-        self.__precond_maxiter = precond_maxiter
-        self.__precond_callback = precond_callback
+        self.precond_atol = precond_atol
+        self.precond_maxiter = precond_maxiter
+        self.precond_callback = precond_callback
 
-        self.__last_num_iterations = 0
+        self.__previous_num_iterations = 0
+
+        super(InvNoiseCovLO_Toeplitz01, self).__init__(
+            nargin=size,
+            matvec=self._mult,
+            input_type=input_type,
+            dtype=dtype,
+        )
 
         if precond_op is None:
-            self.__precond_op = None
+            self.precond_op = None
         elif isinstance(precond_op, LinearOperator) or isinstance(
             precond_op, np.ndarray
         ):
-            self.__precond_op = precond_op
+            self.precond_op = precond_op
         elif precond_op in ["Strang", "TChan", "RChan", "KK2"]:
             if input_type == "power_spectrum":
-                cov = np.fft.ifft(input).real[:size]
+                cov = scipy.fft.ifft(
+                    input,
+                    workers=MPI_UTILS.nthreads_per_process,
+                )[:size]
+                cov = cov.real.astype(dtype=dtype, copy=False)
             else:
                 cov = input[:size]
 
@@ -204,7 +233,7 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
                 new_cov[0] = 0
                 new_cov = cov - new_cov
 
-            self.__precond_op = InvNoiseCovLO_Circulant(
+            self.precond_op = InvNoiseCovLO_Circulant(
                 size=size,
                 input=new_cov,
                 input_type="covariance",
@@ -217,29 +246,44 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
                 message="Invalid preconditioner operator provided!",
             )
 
-        super(InvNoiseCovLO_Toeplitz01, self).__init__(
-            nargin=size,
-            matvec=self._mult,
-            input_type=input_type,
-            dtype=dtype,
-        )
+    @property
+    def precond_op(self):
+        return self.__precond_op
+
+    @precond_op.setter
+    def precond_op(self, operator: LinearOperator):
+        if operator is not None:
+            MPI_RAISE_EXCEPTION(
+                condition=(self.shape != operator.shape),
+                exception=ValueError,
+                message=f"The shape of the input operator {operator.shape} is not compatible with the shape of inverse Toeplitz operator {self.shape}",
+            )
+        self.__precond_op = operator
 
     @property
     def diag(self) -> np.ndarray:
-        factor = 1.0
-        return factor * np.ones(self.size, dtype=self.dtype)
+        try:
+            diag_arr = getattr(self, "__diag")
+        except AttributeError:
+            factor = 1.0
+            diag_arr = factor * np.ones(self.size, dtype=self.dtype)
+        return diag_arr
+
+    @diag.setter
+    def diag(self, diag: np.ndarray):
+        self.__diag = diag
 
     @property
-    def get_last_num_iterations(self) -> int:
-        return self.__last_num_iterations
+    def previous_num_iterations(self) -> int:
+        return self.__previous_num_iterations
 
     def get_inverse(self):
         return self.__toeplitz_op
 
     def __callback(self, x, r, norm_residual):
-        self.__last_num_iterations += 1
-        if self.__precond_callback is not None:
-            self.__precond_callback(x, r, norm_residual)
+        self.__previous_num_iterations += 1
+        if self.precond_callback is not None:
+            self.precond_callback(x, r, norm_residual)
 
     def _mult(self, vec: np.ndarray):
         MPI_RAISE_EXCEPTION(
@@ -248,7 +292,7 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
             message=f"Dimensions of `vec` is not compatible with the dimensions of this `InvNoiseCovLO_Toeplitz` instance.\nShape of `InvNoiseCovLO_Toeplitz` instance: {self.shape}\nShape of `vec`: {vec.shape}",
         )
 
-        self.__last_num_iterations = 0
+        self.__previous_num_iterations = 0
 
         if vec.dtype != self.dtype:
             if MPI_UTILS.rank == 0:
@@ -261,9 +305,9 @@ class InvNoiseCovLO_Toeplitz01(InvNoiseCovLinearOperator):
         prod, _ = cg(
             A=self.__toeplitz_op,
             b=vec,
-            atol=self.__precond_atol,
-            maxiter=self.__precond_maxiter,
-            M=self.__precond_op,
+            atol=self.precond_atol,
+            maxiter=self.precond_maxiter,
+            M=self.precond_op,
             callback=self.__callback,
             parallel=False,
         )
