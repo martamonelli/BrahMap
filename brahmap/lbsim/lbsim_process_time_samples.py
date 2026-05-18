@@ -33,6 +33,9 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         _description_, by default 1.0e-5
     dtype_float : DTypeFloat, optional
         _description_, by default np.float64
+    inpainting : bool, optional
+        If True, pol_angles and pix_indices will be resized to double
+        the observation length, by default False
     """
     def __init__(
         self,
@@ -46,6 +49,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
         threshold: float = 1.0e-5,
         dtype_float: DTypeFloat = np.float64,
+        inpainting: bool = False,
     ):
         self.__nside = nside
         self.__coordinate_system = output_coordinate_system
@@ -62,10 +66,12 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         for obs in self.obs_list:
             num_total_samples += obs.n_detectors * obs.n_samples
 
+        if inpainting:
+            num_total_samples *= 2
+
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
 
-        start_idx = 0
         end_idx = 0
         for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
             if hwp is None:
@@ -87,6 +93,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                     pointings_dtype=dtype_float,
                 )
 
+                start_idx = end_idx
                 end_idx += obs.n_samples
 
                 pol_angles[start_idx:end_idx] = lbs.pointings_in_obs._get_pol_angle(
@@ -101,6 +108,33 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                 start_idx = end_idx
 
+                if inpainting:                                        
+                    # #first "half" of the inpainted samples in a trash pixel
+                    start_idx = end_idx
+                    end_idx += int(obs.n_samples/2)
+
+                    # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pix_indices[start_idx:end_idx] = npix
+
+                    npix += 1                    
+
+                    # #second "half" of the inpainted samples in *another* trash pixel
+                    start_idx = end_idx
+                    end_idx += obs.n_samples - int(obs.n_samples/2)
+
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pix_indices[start_idx:end_idx] = npix
+
+                    npix += 1
+
+                    #pix_temp = pix_indices[start_idx:end_idx]
+                    #start_idx = end_idx
+                    #end_idx = start_idx + obs.n_samples
+                    #pix_indices[start_idx:end_idx] = np.flip(pix_temp)
+                    #pol_angles[start_idx:end_idx] = 10000*np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    #pointings_flag[start_idx:end_idx] = False
+                    
             del hwp_angle, curr_pointings_det
 
         del curr_pointings

@@ -108,6 +108,9 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         _description_, by default "power_spectrum"
     dtype : DTypeFloat, optional
         _description_, by default np.float64
+    inpainting : bool, optional
+        If True, the input covariance/power spectrum will be resized to double
+        the observation length, by default False
     """
 
     def __init__(
@@ -116,6 +119,7 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         input: Union[dict, Union[np.ndarray, List]],
         input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
         dtype: DTypeFloat = np.float64,
+        inpainting: bool = False,
     ):
         if isinstance(obs, lbs.Observation):
             obs_list = [obs]
@@ -129,11 +133,12 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
 
             for obs in obs_list:
                 # if input is a dict
+                n_samples_new = obs.n_samples if not inpainting else 2*obs.n_samples
                 for det_idx in range(obs.n_detectors):
-                    block_size.append(obs.n_samples)
+                    block_size.append(n_samples_new)
 
                     resized_input = self.__resize_input(
-                        new_size=obs.n_samples,
+                        new_size=n_samples_new,
                         input=input[obs.name[det_idx]],
                         input_type=input_type,
                         dtype=dtype,
@@ -145,19 +150,19 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
             block_input = {}
 
             for obs in obs_list:
+                n_samples_new = obs.n_samples if not inpainting else 2*obs.n_samples
                 for det_idx in range(obs.n_detectors):
                     # if input is an array or a list, it will be taken as same for all the detectors available in the observation
-                    block_size.append(obs.n_samples)
-
-                    if obs.n_samples not in block_input.keys():
+                    block_size.append(n_samples_new)
+                    
+                    if n_samples_new not in block_input.keys():
                         resized_input = self.__resize_input(
-                            new_size=obs.n_samples,
+                            new_size=n_samples_new,
                             input=input,
                             input_type=input_type,
                             dtype=dtype,
                         )
-
-                        block_input[obs.n_samples] = resized_input
+                        block_input[n_samples_new] = resized_input
         else:
             MPI_RAISE_EXCEPTION(
                 condition=True,
