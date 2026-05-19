@@ -217,7 +217,7 @@ def LBSim_compute_GLS_maps(
                 # inverse of the 1/f power spectra
                 P_oof_inv = P_oof_inv_func(nsamp_inpainted, sampling_rate_hz, net_ukrts, fknee_mhz, alpha, fmin_hz)
 
-                nn = 32 #FIXME: how should we pick this?
+                nn = 8 #FIXME: by hand, but smaller than detector_sampling_freq/(fknee_mhz*1e-3) = 5
 
                 tod_temp_binned = np.empty(int(nsamp_temp/nn))
 
@@ -253,7 +253,7 @@ def LBSim_compute_GLS_maps(
                 # Define the LinearOperator for CG
                 A_op_binned = LinearOperator((lenx_binned,lenx_binned), matvec=A_func_x_only_binned)
 
-                x_sol_10_binned, info = cg(A_op_binned, b_binned, rtol=1e-15)
+                x_sol_10_binned, info = cg(A_op_binned, b_binned, rtol=1e-5)
 
                 x = nn*(1/2 + np.arange(nsamp_binned))
                 y = x_sol_10_binned
