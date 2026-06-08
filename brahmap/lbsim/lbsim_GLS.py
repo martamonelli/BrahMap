@@ -17,6 +17,8 @@ import scipy as sp
 from scipy.sparse.linalg import cg, LinearOperator
 from scipy.interpolate import CubicSpline
 
+import utils_inpainting
+
 @dataclass
 class LBSimGLSParameters(GLSParameters):
     """A data class encapsulating the configuration parameters for the
@@ -214,7 +216,7 @@ def LBSim_compute_GLS_maps(
                 tod_temp = obs.tod[det_idx]
                 nsamp_temp = len(tod_temp)
 
-                fknee_mhz = fknees_mhz[det_idx]
+                fknee_hz = fknees_mhz[det_idx]*1e-3
                 fmin_hz = fmins_hz[det_idx]
                 alpha = alphas[det_idx]
                 net_ukrts = nets_ukrts[det_idx]
@@ -226,6 +228,11 @@ def LBSim_compute_GLS_maps(
                 start_idx = end_idx
                 end_idx += nsamp_temp
 
+                bin_size = 8
+                
+                x_sol = inpainting_func(tod_temp, nsamp_temp, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, bin_size)
+                
+                '''
                 # total length of the inpainted TOD
                 nsamp_inpainted = 2*nsamp_temp
 
@@ -277,6 +284,9 @@ def LBSim_compute_GLS_maps(
                 x_sol_10_binned_spline = cs(np.arange(nsamp_temp))
 
                 time_ordered_data[start_idx:end_idx] = x_sol_10_binned_spline
+                '''
+
+                time_ordered_data[start_idx:end_idx] = x_sol
 
                 start_idx = end_idx
     else: 
