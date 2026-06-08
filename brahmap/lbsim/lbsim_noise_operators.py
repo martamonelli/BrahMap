@@ -132,7 +132,7 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         input: dict | npt.ArrayLike,
         input_type: Literal["covariance", "power_spectrum"] = "power_spectrum",
         dtype: DTypeFloat = np.float64,
-        inpainting: bool = False,
+        inpainting_len: int | None = None,
     ) -> None:
         if isinstance(obs, lbs.Observation):
             obs_list = [obs]
@@ -147,7 +147,9 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
 
             for obs in obs_list:
                 # if input is a dict
-                n_samples_new = obs.n_samples if not inpainting else 2*obs.n_samples
+                n_samples_new = obs.n_samples 
+                if inpainting_len != None:
+                    n_samples_new += inpainting_len
                 for det_idx in range(obs.n_detectors):
                     block_size.append(n_samples_new)
 
@@ -164,7 +166,9 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
             block_input_dict: dict = {}
 
             for obs in obs_list:
-                n_samples_new = obs.n_samples if not inpainting else 2*obs.n_samples
+                n_samples_new = obs.n_samples 
+                if inpainting_len != None:
+                    n_samples_new += inpainting_len
                 for det_idx in range(obs.n_detectors):
                     # if input is an array or a list, it will be taken as same for all
                     # the detectors available in the observation

@@ -125,7 +125,7 @@ def LBSim_compute_GLS_maps(
     dtype_float: DTypeFloat = np.float64,
     LBSim_gls_parameters: LBSimGLSParameters = LBSimGLSParameters(),
     x0: npt.NDArray[np.number] | None = None,
-    inpainting: bool = False,
+    inpainting_len: int | None = None,
 ) -> LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]:
     """Computes the Generalized Least Squares (GLS) maps from
     `litebird_sim` observations.
@@ -186,7 +186,7 @@ def LBSim_compute_GLS_maps(
         output_coordinate_system=LBSim_gls_parameters.output_coordinate_system,
         threshold=threshold,
         dtype_float=dtype_float,
-        inpainting=inpainting,
+        inpainting_len=inpainting_len,
     )
 
     if isinstance(components, str):
@@ -200,7 +200,7 @@ def LBSim_compute_GLS_maps(
             factor=1.0,
         )
 
-    if inpainting:
+    if inpainting_len != None:
         time_ordered_data = np.empty(processed_samples.nsamples)
 
         end_idx = 0
@@ -302,13 +302,13 @@ def LBSim_compute_GLS_maps(
         x0=x0,
     )
 
-    if inpainting:
+    if inpainting_len != None:
         lbsim_gls_result.GLS_maps = lbsim_gls_result.GLS_maps[:,:12*nside**2]
 
     lbsim_gls_result = LBSimGLSResult(
         nside=nside,
         coordinate_system=LBSim_gls_parameters.output_coordinate_system,
-        **asdict(gls_result),
+        **asdict(lbsim_gls_result),
     )
 
     if LBSim_gls_parameters.return_processed_samples:
