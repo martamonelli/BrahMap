@@ -84,7 +84,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
             num_total_samples += obs.n_detectors * obs.n_samples
 
             if inpainting_len != None:
-                num_total_samples += inpainting_len
+                num_total_samples += obs.n_detectors * inpainting_len
 
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
@@ -130,7 +130,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                 if inpainting_len != None:                                        
                     # #first "half" of the inpainted samples in a trash pixel
                     start_idx = end_idx
-                    end_idx += obs.n_samples//2
+                    end_idx += inpainting_len//2
 
                     # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
                     pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
@@ -140,7 +140,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                     # #second "half" of the inpainted samples in *another* trash pixel
                     start_idx = end_idx
-                    end_idx += obs.n_samples - obs.n_samples//2
+                    end_idx += inpainting_len - inpainting_len//2
 
                     pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
                     pix_indices[start_idx:end_idx] = npix

@@ -17,7 +17,7 @@ import scipy as sp
 from scipy.sparse.linalg import cg, LinearOperator
 from scipy.interpolate import CubicSpline
 
-import utils_inpainting
+from ..lbsim.utils_inpainting import inpainting_func
 
 @dataclass
 class LBSimGLSParameters(GLSParameters):
@@ -226,11 +226,11 @@ def LBSim_compute_GLS_maps(
                 time_ordered_data[start_idx:end_idx] = tod_temp
 
                 start_idx = end_idx
-                end_idx += nsamp_temp
+                end_idx += inpainting_len
 
                 bin_size = 8
                 
-                x_sol = inpainting_func(tod_temp, nsamp_temp, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, bin_size)
+                x_sol = inpainting_func(tod_temp, inpainting_len, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, bin_size)
                 
                 '''
                 # total length of the inpainted TOD
