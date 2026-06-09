@@ -181,7 +181,7 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
                             input_type=input_type,
                             dtype=dtype,
                         )
-                        block_input[n_samples_new] = resized_input
+                        block_input_dict[n_samples_new] = resized_input
             block_input = block_input_dict
         else:
             raise ValueError(
