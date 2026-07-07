@@ -51,6 +51,8 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         `np.float64`
     inpainting_len : int, optional
         The number of inpainted samples per chunk, by default 'None' (no inpainting).
+    zero_padding_len : int, optional
+        Length of the zero-padding, by default 'None' (no zero-padding).
     trash_pix_per_chunk : int, optional
         The number of trash pixels where to project the inpainted samples per chunk, by default 'None' (no inpainting).
     """
@@ -68,6 +70,7 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         threshold: float = 1.0e-5,
         dtype_float: DTypeFloat = np.float64,
         inpainting_len: int | None = None,
+        zero_padding_len: int | None = None,
         trash_pix_per_chunk: int | None = None,
     ) -> None:
         self.__nside = nside
@@ -81,12 +84,20 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
             observations=observations, pointings=pointings
         )
 
+        if inpainting_len != None:
+            extra_len = inpainting_len
+            if zero_padding_len != None:
+                print("You can't inpaint and zero-pad!")
+                quit()
+        elif zero_padding_len != None:
+            extra_len = zero_padding_len
+
         num_total_samples = 0
         for obs in self.obs_list:
             num_total_samples += obs.n_detectors * obs.n_samples
 
-            if inpainting_len != None:
-                num_total_samples += obs.n_detectors * inpainting_len
+            if extra_len != None:
+                num_total_samples += obs.n_detectors * extra_len
 
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
@@ -129,12 +140,12 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                 start_idx = end_idx
 
-                if inpainting_len != None:    
-                    max_idx = end_idx + inpainting_len                                   
+                if extra_len != None:    
+                    max_idx = end_idx + extra_len                                   
                     for j in range(trash_pix_per_chunk): 
                         # first "half" of the inpainted samples in a trash pixel
                         start_idx = end_idx
-                        end_idx += min(inpainting_len//trash_pix_per_chunk, max_idx) 
+                        end_idx += min(extra_len//trash_pix_per_chunk, max_idx) 
 
                         # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
                         pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
@@ -142,12 +153,8 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                         npix += 1
 
-                        #pix_temp = pix_indices[start_idx:end_idx]
-                        #start_idx = end_idx
-                        #end_idx = start_idx + obs.n_samples
-                        #pix_indices[start_idx:end_idx] = np.flip(pix_temp)
-                        #pol_angles[start_idx:end_idx] = 10000*np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
-                        #pointings_flag[start_idx:end_idx] = False
+                        if zero_padding_len != None:
+                            pointings_flag[start_idx:end_idx] = False
                     
             del hwp_angle, curr_pointings_det
 

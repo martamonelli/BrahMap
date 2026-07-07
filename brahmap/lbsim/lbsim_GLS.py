@@ -97,6 +97,7 @@ def LBSim_compute_GLS_maps(
     LBSim_gls_parameters: LBSimGLSParameters = LBSimGLSParameters(),
     x0: npt.NDArray[np.number] | None = None,
     inpainting_params: List[int] | None = None,
+    zero_padding_len: int | None = None,
 ) -> LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]:
     """Computes the Generalized Least Squares (GLS) maps from
     `litebird_sim` observations.
@@ -140,6 +141,8 @@ def LBSim_compute_GLS_maps(
         - inpainting_len: the number of inpainted samples per chunk,
         - samples_per_bin: number of samples per bin for the inpaining algorithm,
         - trash_pix_per_chunk: number of trash pixels where to project the inpainted samples per chunk.
+    zero_padding_len: int | None = None,
+        The length of the zero-padding per chunk.
     Returns
     -------
     LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]
@@ -153,7 +156,14 @@ def LBSim_compute_GLS_maps(
 
     if inpainting_params is not None:
         inpainting_len, samples_per_bin, trash_pix_per_chunk = inpainting_params
+        extra_samples = inpainting_len
         assert all(x > 0 for x in inpainting_params), "all inpainting parameters must be positive"
+        if zero_padding_len is not None:
+            print("You can't inpaint and zero-pad!")
+            quit()
+    elif zero_padding_len is not None:
+        trash_pix_per_chunk = 1
+        extra_samples = zero_padding_len
 
     processed_samples = LBSimProcessTimeSamples(
         nside=nside,
@@ -167,6 +177,7 @@ def LBSim_compute_GLS_maps(
         threshold=threshold,
         dtype_float=dtype_float,
         inpainting_len=inpainting_len,
+        zero_padding_len=zero_padding_len,
         trash_pix_per_chunk=trash_pix_per_chunk,
     )
 
@@ -216,7 +227,26 @@ def LBSim_compute_GLS_maps(
                 time_ordered_data[start_idx:end_idx] = x_sol
 
                 start_idx = end_idx
-    else: 
+    elif zero_padding_len != None:
+        time_ordered_data = np.empty(processed_samples.nsamples)
+
+        end_idx = 0
+
+        for obs in observations:
+            for det_idx in range(obs.n_detectors):
+                tod_temp = obs.tod[det_idx]
+                nsamp_temp = len(tod_temp)
+
+                start_idx = end_idx
+                end_idx += nsamp_temp
+                time_ordered_data[start_idx:end_idx] = tod_temp
+
+                start_idx = end_idx
+                end_idx += zero_padding_len
+                time_ordered_data[start_idx:end_idx] = 0
+
+                start_idx = end_idx
+    else:
         time_ordered_data = np.concatenate(
             [getattr(obs, components[0]) for obs in processed_samples.obs_list], axis=None
         )
