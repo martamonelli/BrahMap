@@ -127,32 +127,26 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                 start_idx = end_idx
 
-                if inpainting_len != None:                                        
-                    # #first "half" of the inpainted samples in a trash pixel
-                    start_idx = end_idx
-                    end_idx += inpainting_len//2
+                n_trash = 1 #FIXME!!!
 
-                    # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
-                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
-                    pix_indices[start_idx:end_idx] = npix
+                if inpainting_len != None:                                       
+                    for j in range(n_trash): 
+                        # first "half" of the inpainted samples in a trash pixel
+                        start_idx = end_idx
+                        end_idx += inpainting_len//n_trash
 
-                    npix += 1                    
+                        # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
+                        pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                        pix_indices[start_idx:end_idx] = npix
 
-                    # #second "half" of the inpainted samples in *another* trash pixel
-                    start_idx = end_idx
-                    end_idx += inpainting_len - inpainting_len//2
+                        npix += 1
 
-                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
-                    pix_indices[start_idx:end_idx] = npix
-
-                    npix += 1
-
-                    #pix_temp = pix_indices[start_idx:end_idx]
-                    #start_idx = end_idx
-                    #end_idx = start_idx + obs.n_samples
-                    #pix_indices[start_idx:end_idx] = np.flip(pix_temp)
-                    #pol_angles[start_idx:end_idx] = 10000*np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
-                    #pointings_flag[start_idx:end_idx] = False
+                        #pix_temp = pix_indices[start_idx:end_idx]
+                        #start_idx = end_idx
+                        #end_idx = start_idx + obs.n_samples
+                        #pix_indices[start_idx:end_idx] = np.flip(pix_temp)
+                        #pol_angles[start_idx:end_idx] = 10000*np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                        #pointings_flag[start_idx:end_idx] = False
                     
             del hwp_angle, curr_pointings_det
 

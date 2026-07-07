@@ -19,6 +19,8 @@ from scipy.interpolate import CubicSpline
 
 from ..lbsim.utils_inpainting import inpainting_func
 
+import time
+
 @dataclass
 class LBSimGLSParameters(GLSParameters):
     """A data class encapsulating the configuration parameters for the
@@ -200,6 +202,8 @@ def LBSim_compute_GLS_maps(
             factor=1.0,
         )
 
+    start = time.time()
+
     if inpainting_len != None:
         time_ordered_data = np.empty(processed_samples.nsamples)
 
@@ -212,7 +216,7 @@ def LBSim_compute_GLS_maps(
             nets_ukrts = obs.net_ukrts
             sampling_rate_hz = obs.sampling_rate_hz
 
-            for det_idx in range(obs.n_detectors):   
+            for det_idx in range(obs.n_detectors):
                 tod_temp = obs.tod[det_idx]
                 nsamp_temp = len(tod_temp)
 
@@ -229,9 +233,9 @@ def LBSim_compute_GLS_maps(
                 end_idx += inpainting_len
 
                 bin_size = 8
-                
+
                 x_sol = inpainting_func(tod_temp, inpainting_len, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, bin_size)
-                
+
                 '''
                 # total length of the inpainted TOD
                 nsamp_inpainted = 2*nsamp_temp
@@ -293,6 +297,10 @@ def LBSim_compute_GLS_maps(
         time_ordered_data = np.concatenate(
             [getattr(obs, components[0]) for obs in processed_samples.obs_list], axis=None
         )
+    
+    print(f"preprocessing took {time.time()-start} seconds")
+
+    start = time.time()
 
     lbsim_gls_result = compute_GLS_maps_from_PTS(
         processed_samples=processed_samples,
@@ -301,6 +309,8 @@ def LBSim_compute_GLS_maps(
         gls_parameters=LBSim_gls_parameters,
         x0=x0,
     )
+
+    print(f"map-making took {time.time()-start} seconds")
 
     if inpainting_len != None:
         lbsim_gls_result.GLS_maps = lbsim_gls_result.GLS_maps[:,:12*nside**2]
