@@ -121,9 +121,8 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
         spectrum array, by default `"power_spectrum"`
     dtype : DTypeFloat, optional
         The data type of the operator, by default `np.float64`
-    inpainting : bool, optional
-        If True, the input covariance/power spectrum will be resized to double
-        the observation length, by default False
+    inpainting_len : int, optional
+        The number of trash pixels where to project the inpainted samples per chunk, by default 'None' (no inpainting).
     """
 
     def __init__(

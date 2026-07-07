@@ -49,9 +49,10 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
     dtype_float : DTypeFloat, optional
         The data type to use for floating point arrays, by default
         `np.float64`
-    inpainting : bool, optional
-        If True, pol_angles and pix_indices will be resized to double
-        the observation length, by default False
+    inpainting_len : int, optional
+        The number of inpainted samples per chunk, by default 'None' (no inpainting).
+    trash_pix_per_chunk : int, optional
+        The number of trash pixels where to project the inpainted samples per chunk, by default 'None' (no inpainting).
     """
 
     def __init__(

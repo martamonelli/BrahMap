@@ -139,7 +139,7 @@ def LBSim_compute_GLS_maps(
         It expects the following structure: [inpainting_len, samples_per_bin, trash_pix_per_chunk], where:
         - inpainting_len: the number of inpainted samples per chunk,
         - samples_per_bin: number of samples per bin for the inpaining algorithm,
-        - trash_pix_per_chunk: number of trash pixels per chunk where to project the inpainted samples.
+        - trash_pix_per_chunk: number of trash pixels where to project the inpainted samples per chunk.
     Returns
     -------
     LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]
