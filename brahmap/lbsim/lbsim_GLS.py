@@ -13,13 +13,10 @@ from ..lbsim import LBSimProcessTimeSamples, DTypeLBSNoiseCov
 
 from ..math import DTypeFloat
 
-import scipy as sp
-from scipy.sparse.linalg import cg, LinearOperator
-from scipy.interpolate import CubicSpline
-
 from ..lbsim.utils_inpainting import inpainting_func
 
 import time
+
 
 @dataclass
 class LBSimGLSParameters(GLSParameters):
@@ -86,7 +83,6 @@ class LBSimGLSResult(GLSResult):
     nside: int
     coordinate_system: lbs.CoordinateSystem
 
-####################################################
 
 def LBSim_compute_GLS_maps(
     nside: int,
