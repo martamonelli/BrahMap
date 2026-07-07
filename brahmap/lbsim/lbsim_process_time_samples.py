@@ -128,11 +128,12 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
 
                 start_idx = end_idx
 
-                if inpainting_len != None:                                       
+                if inpainting_len != None:    
+                    max_idx = end_idx + inpainting_len                                   
                     for j in range(trash_pix_per_chunk): 
                         # first "half" of the inpainted samples in a trash pixel
                         start_idx = end_idx
-                        end_idx += min(inpainting_len//trash_pix_per_chunk, inpainting_len)
+                        end_idx += min(inpainting_len//trash_pix_per_chunk, max_idx) 
 
                         # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
                         pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
