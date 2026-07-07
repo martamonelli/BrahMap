@@ -225,7 +225,7 @@ def LBSim_compute_GLS_maps(
 
     start = time.time()
 
-    lbsim_gls_result = compute_GLS_maps_from_PTS(
+    gls_result = compute_GLS_maps_from_PTS(
         processed_samples=processed_samples,
         time_ordered_data=time_ordered_data,
         inv_noise_cov_operator=inv_noise_cov_operator,
@@ -236,12 +236,12 @@ def LBSim_compute_GLS_maps(
     print(f"map-making took {time.time()-start} seconds")
 
     if inpainting_len != None:
-        lbsim_gls_result.GLS_maps = lbsim_gls_result.GLS_maps[:,:12*nside**2]
+        lbsim_gls_result.GLS_maps = gls_result.GLS_maps[:,:12*nside**2]
 
     lbsim_gls_result = LBSimGLSResult(
         nside=nside,
         coordinate_system=LBSim_gls_parameters.output_coordinate_system,
-        **asdict(lbsim_gls_result),
+        **asdict(gls_result),
     )
 
     if LBSim_gls_parameters.return_processed_samples:
