@@ -96,7 +96,7 @@ def LBSim_compute_GLS_maps(
     dtype_float: DTypeFloat = np.float64,
     LBSim_gls_parameters: LBSimGLSParameters = LBSimGLSParameters(),
     x0: npt.NDArray[np.number] | None = None,
-    inpainting_len: int | None = None,
+    inpainting_params: List[int] | None = None,
 ) -> LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]:
     """Computes the Generalized Least Squares (GLS) maps from
     `litebird_sim` observations.
@@ -134,7 +134,12 @@ def LBSim_compute_GLS_maps(
     x0 : npt.NDArray[np.number] | None, optional
         Initial guess for the GLS solution in the form of interleaved
         maps (e.g. $[I_1, Q_1, U_1, I_2, Q_2, U_2, \\dots]$), by default `None`
-
+    inpainting_params: List[int] | None = None,
+        A list of integers specifying the method parameters for inpainting, by default 'None' (no inpainting).
+        It expects the following structure: [inpainting_len, samples_per_bin, trash_pix_per_chunk], where:
+        - inpainting_len: the number of inpainted samples per chunk,
+        - samples_per_bin: number of samples per bin for the inpaining algorithm,
+        - trash_pix_per_chunk: number of trash pixels per chunk where to project the inpainted samples.
     Returns
     -------
     LBSimGLSResult | tuple[LBSimProcessTimeSamples, LBSimGLSResult]
@@ -145,6 +150,10 @@ def LBSim_compute_GLS_maps(
         noise_weights = None
     else:
         noise_weights = inv_noise_cov_operator.diag
+
+    if inpainting_params is not None:
+        inpainting_len, samples_per_bin, trash_pix_per_chunk = inpainting_params
+        assert all(x > 0 for x in inpainting_params), "all inpainting parameters must be positive"
 
     processed_samples = LBSimProcessTimeSamples(
         nside=nside,
@@ -158,6 +167,7 @@ def LBSim_compute_GLS_maps(
         threshold=threshold,
         dtype_float=dtype_float,
         inpainting_len=inpainting_len,
+        trash_pix_per_chunk=trash_pix_per_chunk,
     )
 
     if isinstance(components, str):
@@ -201,9 +211,7 @@ def LBSim_compute_GLS_maps(
                 start_idx = end_idx
                 end_idx += inpainting_len
 
-                bin_size = 8
-
-                x_sol = inpainting_func(tod_temp, inpainting_len, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, bin_size)
+                x_sol = inpainting_func(tod_temp, inpainting_len, net_ukrts, fknee_hz, alpha, fmin_hz, sampling_rate_hz, samples_per_bin)
 
                 time_ordered_data[start_idx:end_idx] = x_sol
 
