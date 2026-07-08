@@ -16,6 +16,7 @@ from ..math import DTypeFloat
 from ..lbsim.utils_inpainting import inpainting_func
 
 import time
+from mpi4py import MPI
 
 
 @dataclass
