@@ -52,23 +52,33 @@ if find_spec("litebird_sim") is not None:
     from . import lbsim
     from .lbsim import (
         LBSimProcessTimeSamples,
+        LBSimProcessTimeSamplesInpainting,
+        LBSimProcessTimeSamplesZeroPadding,
         LBSim_InvNoiseCovLO_UnCorr,
         LBSim_InvNoiseCovLO_Circulant,
+        LBSim_InvNoiseCovLO_CirculantExtraSamples,
         LBSim_InvNoiseCovLO_Toeplitz,
         LBSimGLSParameters,
         LBSimGLSResult,
         LBSim_compute_GLS_maps,
+        LBSim_compute_GLS_maps_inpainting,
+        LBSim_compute_GLS_maps_zero_padding,
     )
 
     __all__ = __all__ + [
         "lbsim",
         "LBSimProcessTimeSamples",
+        "LBSimProcessTimeSamplesInpainting",
+        "LBSimProcessTimeSamplesZeroPadding",
         "LBSim_InvNoiseCovLO_UnCorr",
         "LBSim_InvNoiseCovLO_Circulant",
+        "LBSim_InvNoiseCovLO_CirculantExtraSamples",
         "LBSim_InvNoiseCovLO_Toeplitz",
         "LBSimGLSParameters",
         "LBSimGLSResult",
         "LBSim_compute_GLS_maps",
+        "LBSim_compute_GLS_maps_inpainting",
+        "LBSim_compute_GLS_maps_zero_padding",
     ]
 
 

@@ -309,7 +309,14 @@ def LBSim_compute_GLS_maps_inpainting(
 
             start_idx = end_idx
     
-    print(f"preprocessing took {time.time()-start} seconds")
+    elapsed = MPI.COMM_WORLD.reduce(
+        time.time() - start,
+        op=MPI.MAX,
+        root=0,
+    )
+
+    if MPI.COMM_WORLD.rank == 0:
+        print(f"Preprocessing took {elapsed:.2f} s")
 
     start = time.time()
 
@@ -321,7 +328,14 @@ def LBSim_compute_GLS_maps_inpainting(
         x0=x0,
     )
 
-    print(f"map-making took {time.time()-start} seconds")
+    elapsed = MPI.COMM_WORLD.reduce(
+        time.time() - start,
+        op=MPI.MAX,
+        root=0,
+    )
+
+    if MPI.COMM_WORLD.rank == 0:
+        print(f"Map-making took {elapsed:.2f} s")
 
     gls_result.GLS_maps = gls_result.GLS_maps[:,:12*nside**2]
 
