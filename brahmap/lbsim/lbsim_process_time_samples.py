@@ -49,12 +49,6 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
     dtype_float : DTypeFloat, optional
         The data type to use for floating point arrays, by default
         `np.float64`
-    inpainting_len : int, optional
-        The number of inpainted samples per chunk, by default 'None' (no inpainting).
-    zero_padding_len : int, optional
-        Length of the zero-padding, by default 'None' (no zero-padding).
-    trash_pix_per_chunk : int, optional
-        The number of trash pixels where to project the inpainted samples per chunk, by default 'None' (no inpainting).
     """
 
     def __init__(
@@ -69,9 +63,6 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
         output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
         threshold: float = 1.0e-5,
         dtype_float: DTypeFloat = np.float64,
-        inpainting_len: int | None = None,
-        zero_padding_len: int | None = None,
-        trash_pix_per_chunk: int | None = None,
     ) -> None:
         self.__nside = nside
         self.__coordinate_system = output_coordinate_system
@@ -84,24 +75,360 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
             observations=observations, pointings=pointings
         )
 
-        if inpainting_len != None:
-            extra_len = inpainting_len
-            if zero_padding_len != None:
-                print("You can't inpaint and zero-pad!")
-                quit()
-        elif zero_padding_len != None:
-            extra_len = zero_padding_len
-
         num_total_samples = 0
         for obs in self.obs_list:
             num_total_samples += obs.n_detectors * obs.n_samples
 
-            if extra_len != None:
-                num_total_samples += obs.n_detectors * extra_len
+        pix_indices = np.empty(num_total_samples, dtype=int)
+        pol_angles = np.empty(num_total_samples, dtype=dtype_float)
+
+        start_idx = 0
+        end_idx = 0
+        for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
+            if hwp is None:
+                hwp_angle = None
+            else:
+                hwp_angle = lbs.pointings_in_obs._get_hwp_angle(
+                    obs=obs, hwp=hwp, pointing_dtype=dtype_float
+                )
+
+            curr_pointings_det: Any = None
+
+            for det_idx in range(obs.n_detectors):
+                (
+                    curr_pointings_det,
+                    hwp_angle,
+                ) = lbs.pointings_in_obs._get_pointings_array(
+                    detector_idx=det_idx,
+                    pointings=curr_pointings,
+                    hwp_angle=hwp_angle,
+                    output_coordinate_system=output_coordinate_system,
+                    pointings_dtype=dtype_float,
+                )
+
+                end_idx += obs.n_samples
+
+                pol_angles[start_idx:end_idx] = lbs.pointings_in_obs._get_pol_angle(
+                    curr_pointings_det=curr_pointings_det,
+                    hwp_angle=hwp_angle,
+                    pol_angle_detectors=obs.pol_angle_rad[det_idx],
+                )
+
+                pix_indices[start_idx:end_idx] = hp.ang2pix(
+                    nside, curr_pointings_det[:, 0], curr_pointings_det[:, 1]
+                )
+
+                start_idx = end_idx
+
+            del hwp_angle, curr_pointings_det
+
+        del curr_pointings
+
+        super().__init__(
+            npix=npix,
+            pointings=pix_indices,
+            pointings_flag=pointings_flag,
+            solver_type=solver_type,
+            pol_angles=pol_angles,
+            noise_weights=noise_weights,
+            threshold=threshold,
+            dtype_float=dtype_float,
+            update_pointings_inplace=True,
+        )
+
+    @property
+    def obs_list(self) -> List[lbs.Observation]:
+        """A list of the parsed `litebird_sim` observations.
+
+        Returns
+        -------
+        List[lbs.Observation]
+            The list of observations
+        """
+        return self.__obs_list
+
+    @property
+    def nside(self) -> int:
+        """The HEALPix resolution parameter.
+
+        Returns
+        -------
+        int
+            The $N_{side}$ parameter
+        """
+        return self.__nside
+
+    @property
+    def coordinate_system(self) -> lbs.CoordinateSystem:
+        """The output celestial coordinate system used in data processing.
+
+        Returns
+        -------
+        lbs.CoordinateSystem
+            The configured coordinate system
+        """
+        return self.__coordinate_system
+    
+
+class LBSimProcessTimeSamplesInpainting(ProcessTimeSamples):
+    """A data container to store the pre-processed and pre-computed arrays and
+    metadata from `litebird_sim` observations.
+
+    Similar to [`ProcessTimeSamples`][brahmap.core.ProcessTimeSamples],
+    this container object can be used to create pointing operators,
+    block-diagonal preconditioners, etc. as required for map-making.
+
+    Parameters
+    ----------
+    nside : int
+        The HEALPix $N_{side}$ resolution parameter defining the number of pixels
+    observations : lbs.Observation | List[lbs.Observation]
+        An instance of the `Observation` class or a list of the same
+    inpaiting_len : int
+        The number of inpainted samples per chunk.
+    trash_pix_per_chunk : int
+        The number of trash pixels where to project the inpainted samples per chunk.
+    pointings : npt.NDArray[np.number] | List[npt.NDArray[np.number]] | None, optional
+        Array of detector pointing indices mapping time samples to observed sky pixels,
+        by default `None`
+    hwp : lbs.HWP | None, optional
+        The Half-Wave Plate (HWP) angles or configuration, by default `None`
+    pointings_flag : npt.NDArray[np.bool_] | None, optional
+        Boolean array indicating valid pointing samples, by default `None`.
+        The `True` value indicates a valid pointing, and the `False`
+        value indicates a bad pointing. If set as `None`, all the
+        pointings are considered valid
+    solver_type : SolverType, optional
+        The level of map-making solver to construct ($I$, $QU$, or
+        $IQU$), by default `SolverType.IQU`
+    noise_weights : npt.NDArray[np.number] | None, optional
+        Array of noise inverse noise variance for each time sample, by
+        default `None`. If set as `None`, inverse noise variance is set to 1 for each
+        time sample
+    output_coordinate_system : lbs.CoordinateSystem, optional
+        The celestial coordinate system to use for the generated output maps, by
+        default `lbs.CoordinateSystem.Galactic`
+    threshold : float, optional
+        The condition number threshold used to flag degenerate or under-sampled
+        pixels, by default `1.0e-5`
+    dtype_float : DTypeFloat, optional
+        The data type to use for floating point arrays, by default
+        `np.float64`
+    """
+
+    def __init__(
+        self,
+        nside: int,
+        observations: lbs.Observation | List[lbs.Observation],
+        inpainting_len: int,
+        trash_pix_per_chunk: int,
+        pointings: npt.NDArray[np.number] | List[npt.NDArray[np.number]] | None = None,
+        hwp: lbs.HWP | None = None,
+        pointings_flag: npt.NDArray[np.bool_] | None = None,
+        solver_type: SolverType = SolverType.IQU,
+        noise_weights: npt.NDArray[np.number] | None = None,
+        output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
+        threshold: float = 1.0e-5,
+        dtype_float: DTypeFloat = np.float64,
+    ) -> None:
+        self.__nside = nside
+        self.__coordinate_system = output_coordinate_system
+        npix = hp.nside2npix(self.nside)
+
+        (
+            self.__obs_list,
+            ptg_list,
+        ) = lbs.pointings_in_obs._normalize_observations_and_pointings(
+            observations=observations, pointings=pointings
+        )
+
+        num_total_samples = 0
+        for obs in self.obs_list:
+            num_total_samples += obs.n_detectors * obs.n_samples
+            num_total_samples += obs.n_detectors * inpainting_len #adding inpainted samples
 
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
 
+        start_idx = 0
+        end_idx = 0
+        for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
+            if hwp is None:
+                hwp_angle = None
+            else:
+                hwp_angle = lbs.pointings_in_obs._get_hwp_angle(
+                    obs=obs, hwp=hwp, pointing_dtype=dtype_float
+                )
+
+            curr_pointings_det: Any = None
+
+            for det_idx in range(obs.n_detectors):
+                (
+                    curr_pointings_det,
+                    hwp_angle,
+                ) = lbs.pointings_in_obs._get_pointings_array(
+                    detector_idx=det_idx,
+                    pointings=curr_pointings,
+                    hwp_angle=hwp_angle,
+                    output_coordinate_system=output_coordinate_system,
+                    pointings_dtype=dtype_float,
+                )
+
+                start_idx = end_idx
+                end_idx += obs.n_samples
+
+                pol_angles[start_idx:end_idx] = lbs.pointings_in_obs._get_pol_angle(
+                    curr_pointings_det=curr_pointings_det,
+                    hwp_angle=hwp_angle,
+                    pol_angle_detectors=obs.pol_angle_rad[det_idx],
+                )
+
+                pix_indices[start_idx:end_idx] = hp.ang2pix(
+                    nside, curr_pointings_det[:, 0], curr_pointings_det[:, 1]
+                )
+
+                samples_per_trash_pix = np.empty(trash_pix_per_chunk, dtype=int)
+                samples_per_trash_pix[:-1] = np.ceil(inpainting_len/trash_pix_per_chunk)
+                samples_per_trash_pix[-1] = inpainting_len - np.sum(samples_per_trash_pix[:-1]) 
+                
+                for nsamp_temp in samples_per_trash_pix: 
+                    start_idx = end_idx
+                    end_idx += nsamp_temp
+
+                    # different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pix_indices[start_idx:end_idx] = npix
+
+                    npix += 1
+
+            del hwp_angle, curr_pointings_det
+
+        del curr_pointings
+
+        super().__init__(
+            npix=npix,
+            pointings=pix_indices,
+            pointings_flag=pointings_flag,
+            solver_type=solver_type,
+            pol_angles=pol_angles,
+            noise_weights=noise_weights,
+            threshold=threshold,
+            dtype_float=dtype_float,
+            update_pointings_inplace=True,
+        )
+
+    @property
+    def obs_list(self) -> List[lbs.Observation]:
+        """A list of the parsed `litebird_sim` observations.
+
+        Returns
+        -------
+        List[lbs.Observation]
+            The list of observations
+        """
+        return self.__obs_list
+
+    @property
+    def nside(self) -> int:
+        """The HEALPix resolution parameter.
+
+        Returns
+        -------
+        int
+            The $N_{side}$ parameter
+        """
+        return self.__nside
+
+    @property
+    def coordinate_system(self) -> lbs.CoordinateSystem:
+        """The output celestial coordinate system used in data processing.
+
+        Returns
+        -------
+        lbs.CoordinateSystem
+            The configured coordinate system
+        """
+        return self.__coordinate_system
+
+
+class LBSimProcessTimeSamplesZeroPadding(ProcessTimeSamples):
+    """A data container to store the pre-processed and pre-computed arrays and
+    metadata from `litebird_sim` observations.
+
+    Similar to [`ProcessTimeSamples`][brahmap.core.ProcessTimeSamples],
+    this container object can be used to create pointing operators,
+    block-diagonal preconditioners, etc. as required for map-making.
+
+    Parameters
+    ----------
+    nside : int
+        The HEALPix $N_{side}$ resolution parameter defining the number of pixels
+    observations : lbs.Observation | List[lbs.Observation]
+        An instance of the `Observation` class or a list of the same
+    zero_padding_len : int
+        The number of zero-padded samples per chunk.
+    pointings : npt.NDArray[np.number] | List[npt.NDArray[np.number]] | None, optional
+        Array of detector pointing indices mapping time samples to observed sky pixels,
+        by default `None`
+    hwp : lbs.HWP | None, optional
+        The Half-Wave Plate (HWP) angles or configuration, by default `None`
+    pointings_flag : npt.NDArray[np.bool_] | None, optional
+        Boolean array indicating valid pointing samples, by default `None`.
+        The `True` value indicates a valid pointing, and the `False`
+        value indicates a bad pointing. If set as `None`, all the
+        pointings are considered valid
+    solver_type : SolverType, optional
+        The level of map-making solver to construct ($I$, $QU$, or
+        $IQU$), by default `SolverType.IQU`
+    noise_weights : npt.NDArray[np.number] | None, optional
+        Array of noise inverse noise variance for each time sample, by
+        default `None`. If set as `None`, inverse noise variance is set to 1 for each
+        time sample
+    output_coordinate_system : lbs.CoordinateSystem, optional
+        The celestial coordinate system to use for the generated output maps, by
+        default `lbs.CoordinateSystem.Galactic`
+    threshold : float, optional
+        The condition number threshold used to flag degenerate or under-sampled
+        pixels, by default `1.0e-5`
+    dtype_float : DTypeFloat, optional
+        The data type to use for floating point arrays, by default
+        `np.float64`
+    """
+
+    def __init__(
+        self,
+        nside: int,
+        observations: lbs.Observation | List[lbs.Observation],
+        zero_padding_len: int,
+        pointings: npt.NDArray[np.number] | List[npt.NDArray[np.number]] | None = None,
+        hwp: lbs.HWP | None = None,
+        pointings_flag: npt.NDArray[np.bool_] | None = None,
+        solver_type: SolverType = SolverType.IQU,
+        noise_weights: npt.NDArray[np.number] | None = None,
+        output_coordinate_system: lbs.CoordinateSystem = lbs.CoordinateSystem.Galactic,
+        threshold: float = 1.0e-5,
+        dtype_float: DTypeFloat = np.float64,
+    ) -> None:
+        self.__nside = nside
+        self.__coordinate_system = output_coordinate_system
+        npix = hp.nside2npix(self.nside)
+
+        (
+            self.__obs_list,
+            ptg_list,
+        ) = lbs.pointings_in_obs._normalize_observations_and_pointings(
+            observations=observations, pointings=pointings
+        )
+
+        num_total_samples = 0
+        for obs in self.obs_list:
+            num_total_samples += obs.n_detectors * obs.n_samples
+            num_total_samples += obs.n_detectors * zero_padding_len #adding zero-padded samples
+
+        pix_indices = np.empty(num_total_samples, dtype=int)
+        pol_angles = np.empty(num_total_samples, dtype=dtype_float)
+
+        start_idx = 0
         end_idx = 0
         for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):
             if hwp is None:
@@ -139,23 +466,16 @@ class LBSimProcessTimeSamples(ProcessTimeSamples):
                 )
 
                 start_idx = end_idx
+                end_idx += zero_padding_len
 
-                if extra_len != None:    
-                    max_idx = end_idx + extra_len                                   
-                    for j in range(trash_pix_per_chunk): 
-                        # first "half" of the inpainted samples in a trash pixel
-                        start_idx = end_idx
-                        end_idx += min(extra_len//trash_pix_per_chunk, max_idx) 
+                # different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
+                pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                pix_indices[start_idx:end_idx] = npix
 
-                        # this is different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
-                        pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
-                        pix_indices[start_idx:end_idx] = npix
+                npix += 1
 
-                        npix += 1
+                pointings_flag[start_idx:end_idx] = False
 
-                        if zero_padding_len != None:
-                            pointings_flag[start_idx:end_idx] = False
-                    
             del hwp_angle, curr_pointings_det
 
         del curr_pointings
