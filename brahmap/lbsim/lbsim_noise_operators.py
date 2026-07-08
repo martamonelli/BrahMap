@@ -107,6 +107,7 @@ class LBSim_InvNoiseCovLO_UnCorr(BlockDiagInvNoiseCovLO):
 class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
     """A block-diagonal linear operator where each diagonal block
     represents the inverse of a circulant noise covariance matrix $N^{-1}$.
+
     Parameters
     ----------
     obs : lbs.Observation | List[lbs.Observation]
@@ -133,8 +134,10 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
             obs_list = [obs]
         else:
             obs_list = obs
+
         block_size = []
         block_input: Any = None
+
         if isinstance(input, dict):
             block_input = []
 
@@ -149,7 +152,9 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
                         input_type=input_type,
                         dtype=dtype,
                     )
+
                     block_input.append(resized_input)
+
         elif isinstance(input, (np.ndarray, list)):
             block_input_dict: dict = {}
 
@@ -174,6 +179,7 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
                 "The input must be an array or a list or a dictionary that maps detector "
                 "names to their covariance/power spectrum"
             )
+
         super(LBSim_InvNoiseCovLO_Circulant, self).__init__(
             InvNoiseCovLO_Circulant,
             block_size=block_size,
@@ -189,6 +195,7 @@ class LBSim_InvNoiseCovLO_Circulant(BlockDiagInvNoiseCovLO):
             # if the size of the returned array is smaller than new_size, it
             # will be captured by the InvNoiseCovLO_Circulant class
             # automatically
+
             # Slicing the input array here is probably not the best choice as
             # it breaks the symmetry of the covariance and renders it
             # non-circulant. Same goes for slicing the covariance computed
@@ -292,14 +299,15 @@ class LBSim_InvNoiseCovLO_Circulant_ExtraSamples(BlockDiagInvNoiseCovLO):
                 "The input must be an array or a list or a dictionary that maps detector "
                 "names to their covariance/power spectrum"
             )
-        super(LBSim_InvNoiseCovLO_Circulant, self).__init__(
+        
+        super(LBSim_InvNoiseCovLO_Circulant_ExtraSamples, self).__init__(
             InvNoiseCovLO_Circulant,
             block_size=block_size,
             block_input=block_input,
             input_type=input_type,
             dtype=dtype,
         )
-        
+
     def __resize_input(
         self, new_size, input, input_type, dtype
     ) -> npt.NDArray[np.number]:
@@ -307,6 +315,7 @@ class LBSim_InvNoiseCovLO_Circulant_ExtraSamples(BlockDiagInvNoiseCovLO):
             # if the size of the returned array is smaller than new_size, it
             # will be captured by the InvNoiseCovLO_Circulant class
             # automatically
+
             # Slicing the input array here is probably not the best choice as
             # it breaks the symmetry of the covariance and renders it
             # non-circulant. Same goes for slicing the covariance computed
