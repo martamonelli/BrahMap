@@ -264,12 +264,13 @@ class LBSim_InvNoiseCovLO_Circulant_ExtraSamples(BlockDiagInvNoiseCovLO):
             block_input = []
 
             for obs in obs_list:
+                obs.n_samples += extra_samples
                 # if input is a dict
                 for det_idx in range(obs.n_detectors):
-                    block_size.append(obs.n_samples + extra_samples)
+                    block_size.append(obs.n_samples)
 
                     resized_input = self.__resize_input(
-                        new_size=obs.n_samples + extra_samples,
+                        new_size=obs.n_samples,
                         input=input[obs.name[det_idx]],
                         input_type=input_type,
                         dtype=dtype,
@@ -279,10 +280,11 @@ class LBSim_InvNoiseCovLO_Circulant_ExtraSamples(BlockDiagInvNoiseCovLO):
             block_input_dict: dict = {}
 
             for obs in obs_list:
+                obs.n_samples += extra_samples
                 for det_idx in range(obs.n_detectors):
                     # if input is an array or a list, it will be taken as same for all
                     # the detectors available in the observation
-                    block_size.append(obs.n_samples + extra_samples)
+                    block_size.append(obs.n_samples)
 
                     if obs.n_samples not in block_input_dict:
                         resized_input = self.__resize_input(
@@ -307,6 +309,9 @@ class LBSim_InvNoiseCovLO_Circulant_ExtraSamples(BlockDiagInvNoiseCovLO):
             input_type=input_type,
             dtype=dtype,
         )
+
+        for obs in obs_list:
+            obs.n_samples -= extra_samples
 
     def __resize_input(
         self, new_size, input, input_type, dtype

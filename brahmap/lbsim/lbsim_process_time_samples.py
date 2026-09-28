@@ -428,6 +428,8 @@ class LBSimProcessTimeSamplesZeroPadding(ProcessTimeSamples):
         pix_indices = np.empty(num_total_samples, dtype=int)
         pol_angles = np.empty(num_total_samples, dtype=dtype_float)
 
+        pointings_flag = np.ones(num_total_samples, dtype=bool)
+
         start_idx = 0
         end_idx = 0
         for obs_idx, (obs, curr_pointings) in enumerate(zip(self.obs_list, ptg_list)):

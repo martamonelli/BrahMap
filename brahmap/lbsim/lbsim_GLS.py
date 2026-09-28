@@ -1,5 +1,5 @@
 import gc
-from typing import List
+from typing import List, Union, Optional
 from dataclasses import dataclass, asdict
 import numpy as np
 import numpy.typing as npt
@@ -14,9 +14,6 @@ from ..lbsim import LBSimProcessTimeSamples, LBSimProcessTimeSamplesInpainting, 
 from ..math import DTypeFloat
 
 from ..lbsim.utils_inpainting import inpainting_func
-
-import time
-from mpi4py import MPI
 
 
 @dataclass
@@ -275,8 +272,6 @@ def LBSim_compute_GLS_maps_inpainting(
             factor=1.0,
         )
 
-    start = time.time()
-
     time_ordered_data = np.empty(processed_samples.nsamples)
 
     end_idx = 0
@@ -309,17 +304,6 @@ def LBSim_compute_GLS_maps_inpainting(
             time_ordered_data[start_idx:end_idx] = x_sol
 
             start_idx = end_idx
-    
-    elapsed = MPI.COMM_WORLD.reduce(
-        time.time() - start,
-        op=MPI.MAX,
-        root=0,
-    )
-
-    if MPI.COMM_WORLD.rank == 0:
-        print(f"Preprocessing took {elapsed:.2f} s")
-
-    start = time.time()
 
     gls_result = compute_GLS_maps_from_PTS(
         processed_samples=processed_samples,
@@ -328,15 +312,6 @@ def LBSim_compute_GLS_maps_inpainting(
         gls_parameters=LBSim_gls_parameters,
         x0=x0,
     )
-
-    elapsed = MPI.COMM_WORLD.reduce(
-        time.time() - start,
-        op=MPI.MAX,
-        root=0,
-    )
-
-    if MPI.COMM_WORLD.rank == 0:
-        print(f"Map-making took {elapsed:.2f} s")
 
     gls_result.GLS_maps = gls_result.GLS_maps[:,:12*nside**2]
 
