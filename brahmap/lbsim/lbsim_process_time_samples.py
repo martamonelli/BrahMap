@@ -286,17 +286,59 @@ class LBSimProcessTimeSamplesInpainting(ProcessTimeSamples):
                 pix_indices[start_idx:end_idx] = hp.ang2pix(
                     nside, curr_pointings_det[:, 0], curr_pointings_det[:, 1]
                 )
-
-                samples_per_trash_pix = np.empty(trash_pix_per_chunk, dtype=int)
-                samples_per_trash_pix[:-1] = np.ceil(inpainting_len/trash_pix_per_chunk)
-                samples_per_trash_pix[-1] = inpainting_len - np.sum(samples_per_trash_pix[:-1]) 
                 
+                """
+                a1 = 1 #FIXME: can't solve for polarization!
+                n_ext = inpainting_len
+                n_pix = trash_pix_per_chunk
+
+                r = 1
+
+                if n_pix != 1:
+                    j = 1
+                    coefficients = np.zeros(n_pix+1+j)
+
+                    coefficients[0] = a1
+                    coefficients[-2] = - n_ext 
+                    coefficients[-1] = n_ext - a1
+
+                    all_roots = np.roots(coefficients)
+
+                    # 1. Keep only roots where the imaginary part is virtually zero
+                    real_roots = all_roots[np.isreal(all_roots)].real
+
+                    # 2. Exclude roots that are <= 1
+                    r = real_roots[np.where(real_roots > 2)]
+
+                samples_per_trash_pix = np.empty(n_pix, dtype=int)
+
+                for i in range(n_pix-1):
+                    j = i+1
+                    samples_per_trash_pix[i] = np.rint(a1*(1-r**(j))/(1-r))
+
+                samples_per_trash_pix[-1] = n_ext - np.sum(samples_per_trash_pix[:-1])
+                """
+
+                #samples_per_trash_pix = np.empty(trash_pix_per_chunk, dtype=int)
+                #samples_per_trash_pix[:-1] = np.ceil(inpainting_len/trash_pix_per_chunk)
+                #samples_per_trash_pix[-1] = inpainting_len - np.sum(samples_per_trash_pix[:-1])
+
+                samples_per_trash_pix = np.zeros(trash_pix_per_chunk, dtype=int)
+                
+                mid_idx_left = (trash_pix_per_chunk - 1) // 2
+                samples_per_trash_pix[:mid_idx_left] = 3
+                samples_per_trash_pix[mid_idx_left] += inpainting_len // 2 - np.sum(samples_per_trash_pix[:mid_idx_left])
+
+                mid_idx_right = trash_pix_per_chunk // 2
+                samples_per_trash_pix[mid_idx_right+1:] = 3
+                samples_per_trash_pix[mid_idx_right] += (inpainting_len + 1) // 2 - np.sum(samples_per_trash_pix[mid_idx_right+1:])
+
                 for nsamp_temp in samples_per_trash_pix: 
                     start_idx = end_idx
                     end_idx += nsamp_temp
 
                     # different than what Guillaume implemented in SANEPIC (psi is constant and the code doesn't solve for polarization)
-                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*2*np.pi
+                    pol_angles[start_idx:end_idx] = np.arange(end_idx-start_idx)/(end_idx-start_idx)*np.pi
                     pix_indices[start_idx:end_idx] = npix
 
                     npix += 1
